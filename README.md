@@ -7,9 +7,9 @@ The upstream agent foundation is [`openai/codex`](https://github.com/openai/code
 ## Features
 
 - Cross-platform Electron app for Windows and macOS.
-- Bundles the open-source `@openai/codex` CLI package and starts a real Codex agent session when the app opens.
-- Chat composer sends prompts directly into the running Codex agent process.
-- Live agent output panel streams Codex CLI output back into the app.
+- Drives the open-source `@openai/codex` CLI through the `@openai/codex-sdk`, surfacing structured, typed agent events.
+- Chat composer renders replies by type — messages, reasoning, command runs (with exit codes), and file diffs — instead of raw terminal bytes.
+- Bring-your-own OpenAI-compatible endpoint: set a Base URL + API key in Settings (key encrypted via Electron `safeStorage`); no login required.
 - `打开位置` button for choosing a workspace directory; changing it restarts Codex in that directory.
 - Top-right terminal button that opens a separate embedded shell panel.
 - Top-right right-sidebar button that reveals tools for 审查, 终端, 浏览器, and 文件.
@@ -38,11 +38,17 @@ npm test
 
 ## Agent architecture
 
-The app now has a real agent path instead of only a visual shell:
+The app drives the official Codex engine through structured events instead of scraping the terminal UI:
 
-1. `src/main.js` resolves the Codex CLI from the bundled `node_modules/.bin/codex`, `OPEN_CODEX_CLI`, or the user PATH.
-2. The main process starts Codex with `node-pty` so the agent can run interactively in the selected workspace.
-3. `src/preload.js` exposes a minimal `openCodex` bridge for starting, prompting, resizing, and disposing Codex sessions.
-4. `src/renderer.html` starts the Codex agent on app load and sends composer input to the live agent.
+1. `src/main/engine/` wraps the engine behind one normalized event contract: `sdkAdapter.js` (the default, via `@openai/codex-sdk` → `codex exec --json`) and `appServerAdapter.js` (the `codex app-server` JSON-RPC control plane, reserved for interactive approvals later). `createEngine()` selects the adapter.
+2. `src/main.js` exposes `engine:*` IPC (check / start / prompt / interrupt) and forwards every normalized event to the renderer as `engine:event`. The embedded shell panel still uses `node-pty` (`terminal:*`).
+3. `src/renderer/ui/agentView.js` renders those events by type — agent messages, reasoning, command runs, file diffs, and to-do lists — building every node with `textContent` so agent output is never parsed as HTML.
+4. `src/preload.js` is the hardened `openCodex` bridge between the page and the main process.
 
-Codex authentication is handled by the upstream CLI. The first run may ask the user to sign in with ChatGPT or configure an API key, matching official Codex CLI behavior.
+### Persistence
+
+Projects, threads, and messages are stored in SQLite (`better-sqlite3`) under the app's user-data directory (`src/main/store/`). The main process writes transparently: a thread row is created lazily on the first prompt, the engine thread id is captured for resume, and completed agent items are saved for later review. The sidebar lists real projects/threads; clicking one replays its saved messages and resumes the engine thread. `better-sqlite3` is a native module — run `npm run rebuild` after install; if it isn't built, persistence degrades to a no-op and live chat still works.
+
+### Bring your own OpenAI-compatible endpoint
+
+There is no in-app login. Open the **设置 / Settings** panel and enter a **Base URL** and **API Key** for any OpenAI-compatible service (plus an optional model name). The key is stored encrypted at rest with Electron `safeStorage` in the app's user-data directory; the renderer only ever learns whether a key is set, never its value. Under the hood the SDK turns the Base URL into `--config openai_base_url=...` and the key into the `CODEX_API_KEY` environment variable for the Codex CLI.

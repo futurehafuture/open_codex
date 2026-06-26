@@ -1,11 +1,17 @@
 {
   "name": "open-codex-app",
-  "version": "0.1.0",
-  "description": "Open source desktop shell for Codex CLI agent on Windows and macOS.",
+  "version": "0.2.0",
+  "description": "Open source desktop app for the Codex agent on Windows and macOS. Drives the official Codex engine through the @openai/codex-sdk and the codex app-server JSON-RPC protocol.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --check src/main.js && node --check src/preload.js && node scripts/check-html.js"
+    "rebuild": "electron-builder install-app-deps",
+    "postinstall": "electron-builder install-app-deps",
+    "gen:protocol": "node scripts/gen-protocol.js",
+    "test": "node scripts/check.js",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
   },
   "keywords": [
     "codex",
@@ -17,10 +23,16 @@
   "author": "Open Codex contributors",
   "license": "Apache-2.0",
   "devDependencies": {
-    "electron": "^31.7.7"
+    "@electron/rebuild": "^3.6.0",
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
-    "@openai/codex": "^0.142.2",
+    "@openai/codex": "0.142.2",
+    "@openai/codex-sdk": "0.142.2",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "better-sqlite3": "^11.10.0",
     "node-pty": "^1.0.0"
   }
 }

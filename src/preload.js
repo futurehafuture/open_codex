@@ -1,23 +1,34 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('openCodex', {
+  // Workspace -----------------------------------------------------------
   chooseWorkspace: () => ipcRenderer.invoke('workspace:choose'),
-  checkAgent: () => ipcRenderer.invoke('agent:check'),
-  startAgent: (options) => ipcRenderer.invoke('agent:start', options),
-  writeAgent: (id, data) => ipcRenderer.send('agent:write', { id, data }),
-  sendAgentPrompt: (id, prompt) => ipcRenderer.send('agent:prompt', { id, prompt }),
-  resizeAgent: (id, cols, rows) => ipcRenderer.send('agent:resize', { id, cols, rows }),
-  disposeAgent: (id) => ipcRenderer.send('agent:dispose', id),
-  onAgentData: (callback) => {
+
+  // Settings (OpenAI-compatible base URL + key) -------------------------
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  saveConfig: (patch) => ipcRenderer.invoke('config:save', patch),
+
+  // Engine --------------------------------------------------------------
+  checkEngine: () => ipcRenderer.invoke('engine:check'),
+  startEngine: (sessionId, cfg) => ipcRenderer.invoke('engine:start', { sessionId, cfg }),
+  sendPrompt: (sessionId, text) => ipcRenderer.send('engine:prompt', { sessionId, text }),
+  interrupt: (sessionId) => ipcRenderer.send('engine:interrupt', { sessionId }),
+  respondApproval: (requestId, decision) =>
+    ipcRenderer.send('engine:respond-approval', { requestId, decision }),
+  onEngineEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('agent:data', listener);
-    return () => ipcRenderer.removeListener('agent:data', listener);
+    ipcRenderer.on('engine:event', listener);
+    return () => ipcRenderer.removeListener('engine:event', listener);
   },
-  onAgentExit: (callback) => {
-    const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('agent:exit', listener);
-    return () => ipcRenderer.removeListener('agent:exit', listener);
+
+  // Store (projects / threads / messages) -------------------------------
+  store: {
+    listProjects: () => ipcRenderer.invoke('store:listProjects'),
+    listThreads: (projectId) => ipcRenderer.invoke('store:listThreads', projectId),
+    listMessages: (threadId) => ipcRenderer.invoke('store:listMessages', threadId),
   },
+
+  // Terminal ------------------------------------------------------------
   createTerminal: (cwd) => ipcRenderer.invoke('terminal:create', cwd),
   writeTerminal: (id, data) => ipcRenderer.send('terminal:write', { id, data }),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send('terminal:resize', { id, cols, rows }),
