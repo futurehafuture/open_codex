@@ -1,0 +1,25 @@
+{
+  "name": "open-codex-app",
+  "version": "0.1.0",
+  "description": "Open source desktop shell for Codex CLI agent on Windows and macOS.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --check src/main.js && node --check src/preload.js && node scripts/check-html.js"
+  },
+  "keywords": [
+    "codex",
+    "openai",
+    "agent",
+    "desktop",
+    "electron"
+  ],
+  "author": "Open Codex contributors",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "electron": "^31.7.7"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  }
+}
