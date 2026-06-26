@@ -45,6 +45,7 @@ const html = fs.readFileSync(path.join(root, 'src/renderer.html'), 'utf8');
 for (const id of [
   'workspaceButton', 'terminalButton', 'toolsButton', 'settingsButton',
   'newChatButton', 'terminalOutput', 'promptInput', 'sendPrompt', 'agentOutput',
+  'projectList',
 ]) {
   if (!html.includes(`id="${id}"`)) fail(`renderer.html missing UI element: ${id}`);
 }
@@ -55,8 +56,14 @@ for (const apiName of ['startEngine', 'sendPrompt', 'onEngineEvent', 'getConfig'
 const settings = fs.readFileSync(path.join(root, 'src/renderer/ui/settings.js'), 'utf8');
 if (!settings.includes('saveConfig')) fail('settings.js does not call saveConfig');
 
+const sidebar = fs.readFileSync(path.join(root, 'src/renderer/ui/sidebar.js'), 'utf8');
+if (!sidebar.includes('listProjects')) fail('sidebar.js does not call listProjects');
+
 const preload = fs.readFileSync(path.join(root, 'src/preload.js'), 'utf8');
-for (const channel of ['engine:start', 'engine:prompt', 'engine:event', 'config:get', 'config:save']) {
+for (const channel of [
+  'engine:start', 'engine:prompt', 'engine:event', 'config:get', 'config:save',
+  'store:listProjects', 'store:listThreads', 'store:listMessages',
+]) {
   if (!preload.includes(channel)) fail(`preload.js missing IPC channel: ${channel}`);
 }
 

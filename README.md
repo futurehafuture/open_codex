@@ -45,6 +45,10 @@ The app drives the official Codex engine through structured events instead of sc
 3. `src/renderer/ui/agentView.js` renders those events by type — agent messages, reasoning, command runs, file diffs, and to-do lists — building every node with `textContent` so agent output is never parsed as HTML.
 4. `src/preload.js` is the hardened `openCodex` bridge between the page and the main process.
 
+### Persistence
+
+Projects, threads, and messages are stored in SQLite (`better-sqlite3`) under the app's user-data directory (`src/main/store/`). The main process writes transparently: a thread row is created lazily on the first prompt, the engine thread id is captured for resume, and completed agent items are saved for later review. The sidebar lists real projects/threads; clicking one replays its saved messages and resumes the engine thread. `better-sqlite3` is a native module — run `npm run rebuild` after install; if it isn't built, persistence degrades to a no-op and live chat still works.
+
 ### Bring your own OpenAI-compatible endpoint
 
 There is no in-app login. Open the **设置 / Settings** panel and enter a **Base URL** and **API Key** for any OpenAI-compatible service (plus an optional model name). The key is stored encrypted at rest with Electron `safeStorage` in the app's user-data directory; the renderer only ever learns whether a key is set, never its value. Under the hood the SDK turns the Base URL into `--config openai_base_url=...` and the key into the `CODEX_API_KEY` environment variable for the Codex CLI.

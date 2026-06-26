@@ -21,6 +21,13 @@ contextBridge.exposeInMainWorld('openCodex', {
     return () => ipcRenderer.removeListener('engine:event', listener);
   },
 
+  // Store (projects / threads / messages) -------------------------------
+  store: {
+    listProjects: () => ipcRenderer.invoke('store:listProjects'),
+    listThreads: (projectId) => ipcRenderer.invoke('store:listThreads', projectId),
+    listMessages: (threadId) => ipcRenderer.invoke('store:listMessages', threadId),
+  },
+
   // Terminal ------------------------------------------------------------
   createTerminal: (cwd) => ipcRenderer.invoke('terminal:create', cwd),
   writeTerminal: (id, data) => ipcRenderer.send('terminal:write', { id, data }),

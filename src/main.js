@@ -7,6 +7,7 @@ const pty = require('node-pty');
 
 const { createEngine, resolveCodexCommand, checkAgent, EngineMode } = require('./main/engine');
 const configStore = require('./main/config/store');
+const store = require('./main/store/repositories');
 const { createLogger } = require('./main/util/logger');
 
 const log = createLogger('main');
@@ -15,6 +16,8 @@ const isMac = process.platform === 'darwin';
 let mainWindow = null;
 /** Lazily-built engine adapter; rebuilt whenever settings change. */
 let engine = null;
+/** local sessionId -> persistence mapping {projectId, dbThreadId, titled, engineThreadId} */
+const sessions = new Map();
 /** id -> node-pty terminal (kept for the embedded shell panel). */
 const terminals = new Map();
 let nextTerminalId = 1;
@@ -55,9 +58,54 @@ function sendToWindow(channel, payload) {
   mainWindow.webContents.send(channel, payload);
 }
 
-/** Forward every normalized engine event to the renderer. */
+/** Forward every normalized engine event to the renderer, persisting along the way. */
 function forwardEngineEvent(event) {
+  persistEvent(event);
   sendToWindow('engine:event', event);
+}
+
+/** Persist the engine thread id + completed items. Never throws into the event path. */
+function persistEvent(event) {
+  const m = event.sessionId ? sessions.get(event.sessionId) : null;
+  if (!m || !m.dbThreadId) return;
+  try {
+    if (event.kind === 'thread_started' && event.threadId && !m.engineThreadId) {
+      store.setThreadEngineId(m.dbThreadId, event.threadId);
+      m.engineThreadId = event.threadId;
+    } else if (event.kind === 'item' && event.phase === 'completed' && event.item) {
+      store.appendItem(m.dbThreadId, event.item);
+      store.touchThread(m.dbThreadId);
+    }
+  } catch (err) {
+    log.warn(`persist event failed: ${err.message}`);
+  }
+}
+
+/** Save a user prompt, creating the thread row lazily on first send. */
+function persistUserMessage(sessionId, text) {
+  const m = sessions.get(sessionId);
+  if (!m || !m.projectId) return;
+  try {
+    if (!m.dbThreadId) {
+      const thread = store.createThread(m.projectId);
+      m.dbThreadId = thread ? thread.id : null;
+    }
+    if (!m.dbThreadId) return;
+    store.appendUserMessage(m.dbThreadId, text);
+    if (!m.titled) {
+      store.setThreadTitle(m.dbThreadId, deriveTitle(text));
+      m.titled = true;
+    }
+    store.touchThread(m.dbThreadId);
+  } catch (err) {
+    log.warn(`persist user message failed: ${err.message}`);
+  }
+}
+
+function deriveTitle(text) {
+  const line = (text || '').split('\n')[0].trim();
+  if (!line) return '新对话';
+  return line.length > 60 ? `${line.slice(0, 60)}…` : line;
 }
 
 /** Build (or reuse) the engine adapter from the current saved settings. */
@@ -139,6 +187,7 @@ ipcMain.handle('engine:start', async (_event, { sessionId, cfg = {} } = {}) => {
     approvalPolicy: cfg.approvalPolicy || settings.approvalPolicy,
     sandboxMode: cfg.sandboxMode || settings.sandboxMode,
   });
+  registerSession(sessionId, cfg);
   try {
     return await getEngine().startSession(sessionId, merged);
   } catch (err) {
@@ -148,7 +197,30 @@ ipcMain.handle('engine:start', async (_event, { sessionId, cfg = {} } = {}) => {
   }
 });
 
+/** Build the persistence mapping for a session (the thread row stays lazy). */
+function registerSession(sessionId, cfg) {
+  try {
+    const project = store.ensureProject(cfg.cwd || os.homedir());
+    let dbThreadId = null;
+    let titled = false;
+    let engineThreadId = null;
+    if (cfg.resumeThreadId) {
+      const thread = store.getThreadByEngineId(cfg.resumeThreadId);
+      if (thread) {
+        dbThreadId = thread.id;
+        titled = Boolean(thread.title);
+      }
+      engineThreadId = cfg.resumeThreadId;
+    }
+    sessions.set(sessionId, { projectId: project ? project.id : null, dbThreadId, titled, engineThreadId });
+  } catch (err) {
+    log.warn(`registerSession failed: ${err.message}`);
+    sessions.set(sessionId, { projectId: null, dbThreadId: null, titled: false, engineThreadId: null });
+  }
+}
+
 ipcMain.on('engine:prompt', (_event, { sessionId, text }) => {
+  persistUserMessage(sessionId, text);
   try {
     getEngine().sendPrompt(sessionId, text);
   } catch (err) {
@@ -163,6 +235,14 @@ ipcMain.on('engine:interrupt', (_event, { sessionId }) => {
 ipcMain.on('engine:respond-approval', (_event, { requestId, decision }) => {
   if (engine) engine.respondApproval(requestId, decision);
 });
+
+/* ------------------------------------------------------------------ */
+/* Store (projects / threads / messages)                             */
+/* ------------------------------------------------------------------ */
+
+ipcMain.handle('store:listProjects', () => store.listProjects());
+ipcMain.handle('store:listThreads', (_event, projectId) => store.listThreads(projectId));
+ipcMain.handle('store:listMessages', (_event, threadId) => store.listMessages(threadId));
 
 /* ------------------------------------------------------------------ */
 /* Terminal (real shell panel — unchanged pty path)                  */
@@ -215,6 +295,7 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   killAll(terminals);
   resetEngine();
+  store.close();
   if (!isMac) app.quit();
 });
 
