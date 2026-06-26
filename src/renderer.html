@@ -10,12 +10,13 @@
     body { margin:0; height:100vh; overflow:hidden; color:var(--text); background:white; }
     button { font:inherit; border:0; background:none; cursor:pointer; color:inherit; }
     .app { display:grid; grid-template-columns: 348px 1fr; height:100vh; }
-    .sidebar { background:#f6f6f7; border-right:1px solid #ddd; padding:68px 22px 22px; display:flex; flex-direction:column; gap:18px; }
+    .sidebar { background:#f6f6f7; border-right:1px solid #ddd; padding:68px 22px 22px; display:flex; flex-direction:column; gap:18px; overflow:auto; }
     .traffic { position:fixed; top:18px; left:16px; display:flex; gap:14px; -webkit-app-region:drag; }
     .dot { width:20px; height:20px; border-radius:50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); } .red{background:#ff5f57}.yellow{background:#ffbd2e}.green{background:#28c840}
     .side-actions, .project-list { display:grid; gap:18px; }
     .nav-row { display:flex; align-items:center; gap:14px; font-size:20px; font-weight:650; }
-    .nav-row svg { width:22px; height:22px; stroke-width:1.8; }
+    .nav-row.clickable { cursor:pointer; }
+    .nav-row.clickable:hover { color:#000; }
     .section { margin-top:24px; color:#a4a7ac; font-size:20px; font-weight:700; }
     .conversation { padding-left:42px; color:#c3c5c8; font-size:18px; line-height:1.3; }
     .history { margin-left:42px; display:grid; gap:18px; font-size:19px; }
@@ -30,32 +31,78 @@
     .icon-button.active, .icon-button:hover { background:#f0f0f1; color:#111; }
     .stage-shell { display:grid; grid-template-columns:1fr 0; min-height:0; transition:grid-template-columns .22s ease; }
     .stage-shell.tools-open { grid-template-columns:minmax(520px, 1fr) 560px; }
-    .stage { min-width:0; display:flex; align-items:center; justify-content:center; padding:54px; transition:border .22s ease; }
+    .stage { min-width:0; display:flex; align-items:center; justify-content:center; padding:40px 54px; transition:border .22s ease; overflow:auto; }
     .tools-open .stage { border-right:1px solid var(--line); }
-    .hero { width:min(1040px, 88%); display:grid; gap:26px; justify-items:center; transform:translateY(-10px); }
-    .tools-open .hero { width:min(620px, 88%); }
-    h1 { margin:0; font-size:42px; line-height:1.15; font-weight:500; text-align:center; letter-spacing:-.03em; }
+    .hero { width:min(1040px, 92%); display:grid; gap:20px; justify-items:center; }
+    .tools-open .hero { width:min(620px, 92%); }
+    h1 { margin:0; font-size:38px; line-height:1.15; font-weight:500; text-align:center; letter-spacing:-.03em; }
     .composer-wrap { width:100%; border-radius:28px; background:#f5f5f5; box-shadow:0 18px 35px rgba(0,0,0,.06); }
-    .composer { min-height:142px; border:1px solid #dedede; border-radius:28px; background:white; padding:20px 24px 16px; display:grid; grid-template-rows:1fr auto; }
-    .prompt-input { width:100%; min-height:58px; resize:none; border:0; outline:0; color:#222; font:20px/1.5 inherit; }
+    .composer { min-height:120px; border:1px solid #dedede; border-radius:28px; background:white; padding:18px 24px 14px; display:grid; grid-template-rows:1fr auto; }
+    .prompt-input { width:100%; min-height:48px; resize:none; border:0; outline:0; color:#222; font-size:19px; line-height:1.5; font-family:inherit; }
     .prompt-input::placeholder { color:#c7c9cc; font-weight:650; }
-    .compose-row { display:flex; align-items:center; gap:16px; color:#777d84; font-size:20px; }
+    .compose-row { display:flex; align-items:center; gap:16px; color:#777d84; font-size:19px; }
     .spacer { flex:1; }
-    .send { width:48px; height:48px; border-radius:50%; background:#8f9093; color:white; display:grid; place-items:center; }
-    .meta { height:64px; display:flex; align-items:center; gap:28px; padding:0 26px; color:#7b8087; font-size:19px; font-weight:650; }
+    .send { width:46px; height:46px; border-radius:50%; background:#111; color:white; display:grid; place-items:center; font-size:20px; }
+    .meta { height:56px; display:flex; align-items:center; gap:26px; padding:0 26px; color:#7b8087; font-size:18px; font-weight:650; }
+
+    /* Structured agent console -------------------------------------------------- */
+    .agent-console { width:100%; height:340px; border:1px solid var(--line); border-radius:18px; background:#fbfbfc; color:var(--text); padding:14px; overflow:auto; text-align:left; font-size:15px; line-height:1.5; box-shadow:0 18px 35px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:10px; }
+    .agent-console:empty::before { content:'输入下方问题，Codex 的回复会在这里按消息 / 命令 / 文件改动分类展示。'; color:#b8bcc2; }
+    .msg { display:flex; }
+    .msg.user { justify-content:flex-end; }
+    .msg .bubble { max-width:86%; padding:9px 13px; border-radius:14px; white-space:pre-wrap; word-break:break-word; }
+    .msg.user .bubble { background:#111; color:#fff; }
+    .msg.agent .bubble { background:#eef0f2; color:var(--text); }
+    .block { font-size:14px; }
+    .reasoning { background:#f3f3f5; border-radius:10px; padding:6px 12px; color:#5a5f66; }
+    .reasoning summary { cursor:pointer; font-weight:600; }
+    .reason-body { margin-top:6px; white-space:pre-wrap; word-break:break-word; }
+    .block.command_execution { background:#0f1115; color:#e6e6e6; border-radius:10px; padding:10px 12px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .cmd-head { display:flex; align-items:center; gap:8px; }
+    .cmd-prompt { color:#7ee787; } .cmd-line { word-break:break-all; }
+    .exit { margin-left:auto; font-size:12px; padding:1px 8px; border-radius:10px; } .exit.ok{background:#1f6f3f;color:#fff} .exit.bad{background:#a33;color:#fff}
+    .cmd-out { margin:8px 0 0; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; color:#cfd3d8; }
+    .block-title { font-weight:700; margin-bottom:6px; color:#3a3f45; }
+    .file-list, .todo-list { display:grid; gap:5px; }
+    .file-row { display:flex; align-items:center; gap:10px; }
+    .tag { font-size:12px; padding:1px 8px; border-radius:8px; background:#e8e8ea; }
+    .tag.add{background:#dff5e3;color:#1f6f3f} .tag.delete{background:#fbe2e2;color:#a33} .tag.update{background:#e6eefb;color:#2456b8}
+    .file-path { font-family:ui-monospace, Menlo, monospace; word-break:break-all; }
+    .todo-list { list-style:none; padding:0; margin:0; }
+    .todo-list li { display:flex; gap:8px; align-items:flex-start; }
+    .todo-list li.done .todo-text { color:#9aa0a6; text-decoration:line-through; }
+    .block.error { background:#fff4f4; border:1px solid #f3caca; border-radius:10px; padding:10px 12px; }
+    .error-body { color:#b3261e; white-space:pre-wrap; word-break:break-word; }
+    .error-hint { color:#8a6d3b; margin-top:6px; font-size:13px; }
+    .error-btn { margin-top:8px; padding:6px 12px; border-radius:8px; background:#111; color:#fff; font-size:13px; }
+    .thinking { color:#9aa0a6; font-size:13px; }
+    .agent-status { width:100%; display:flex; justify-content:space-between; gap:16px; color:#7b8087; font-size:14px; }
+
+    /* Settings modal ------------------------------------------------------------ */
+    .settings-overlay { position:fixed; inset:0; background:rgba(0,0,0,.36); display:grid; place-items:center; z-index:50; }
+    .settings-modal { width:min(520px, 92%); background:#fff; border-radius:16px; padding:24px; box-shadow:0 30px 60px rgba(0,0,0,.25); display:grid; gap:14px; }
+    .settings-title { margin:0; font-size:22px; }
+    .settings-sub { margin:0; color:#7b8087; font-size:14px; line-height:1.5; }
+    .settings-field { display:grid; gap:6px; }
+    .settings-label { font-size:14px; font-weight:600; color:#3a3f45; }
+    .settings-input { height:40px; border:1px solid var(--line); border-radius:10px; padding:0 12px; font-size:15px; font-family:inherit; }
+    .settings-input:focus { outline:2px solid #111; border-color:#111; }
+    .settings-error { color:#b3261e; font-size:13px; min-height:16px; }
+    .settings-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+    .btn { padding:9px 16px; border-radius:10px; font-size:14px; font-weight:600; }
+    .btn.ghost { background:#f0f0f1; } .btn.primary { background:#111; color:#fff; }
+
     .tool-panel { overflow:hidden; display:flex; align-items:center; justify-content:center; padding:42px; }
     .tool-list { width:min(530px, 100%); display:grid; gap:8px; }
     .tool-card { height:58px; border-radius:10px; background:#f4f4f5; display:flex; align-items:center; gap:18px; padding:0 20px; font-size:20px; }
     .shortcut { margin-left:auto; color:#777; background:#e8e8e9; border-radius:14px; padding:2px 9px; font-size:16px; }
-    .agent-console { width:100%; height:260px; border:1px solid var(--line); border-radius:18px; background:#111; color:#f2f2f2; padding:16px; font:14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow:auto; white-space:pre-wrap; box-shadow:0 18px 35px rgba(0,0,0,.08); }
-    .agent-status { width:100%; display:flex; justify-content:space-between; gap:16px; color:#7b8087; font-size:14px; }
     .terminal { border-top:1px solid var(--line); height:0; overflow:hidden; transition:height .22s ease; background:white; }
     .terminal.open { height:360px; }
     .terminal-tabs { height:54px; display:flex; align-items:center; padding:0 24px; gap:14px; }
     .tab { display:flex; align-items:center; gap:10px; background:#f4f4f5; border-radius:12px; padding:10px 16px; font-size:18px; font-weight:700; }
     .close { margin-left:auto; color:#858585; font-size:28px; }
     #terminalOutput { height:calc(100% - 54px); padding:0 24px 18px; font:18px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; outline:0; overflow:auto; }
-    @media (max-width: 1160px) { .app { grid-template-columns:300px 1fr; } .stage-shell.tools-open { grid-template-columns:1fr 420px; } h1{font-size:36px} }
+    @media (max-width: 1160px) { .app { grid-template-columns:300px 1fr; } .stage-shell.tools-open { grid-template-columns:1fr 420px; } h1{font-size:32px} }
   </style>
 </head>
 <body>
@@ -63,7 +110,7 @@
   <div class="app">
     <aside class="sidebar">
       <div class="side-actions">
-        <div class="nav-row">✎ 新对话</div><div class="nav-row">⌕ 搜索</div><div class="nav-row">⌘ 插件</div><div class="nav-row">◴ 自动化</div>
+        <div class="nav-row clickable" id="newChatButton">✎ 新对话</div><div class="nav-row">⌕ 搜索</div><div class="nav-row">⌘ 插件</div><div class="nav-row">◴ 自动化</div>
       </div>
       <div class="section">项目</div>
       <div class="project-list">
@@ -74,7 +121,7 @@
         <div class="history"><div class="history-row"><span>hello</span><span class="time">19 小时</span></div><div class="history-row"><span>?</span><span class="time">1 天</span></div><div class="history-row"><span>?</span><span class="time">1 天</span></div><div class="history-row"><span>?</span><span class="time">1 天</span></div><div class="history-row"><span>噢ok</span><span class="time">2 周</span></div></div>
         <div class="conversation">展开显示</div>
       </div>
-      <div class="nav-row settings">⚙ 设置</div>
+      <div class="nav-row settings clickable" id="settingsButton">⚙ 设置</div>
     </aside>
     <main class="main">
       <header class="topbar">
@@ -83,65 +130,97 @@
         <button class="icon-button" id="toolsButton" title="打开右侧边栏">◧</button>
       </header>
       <section class="stage-shell" id="stageShell">
-        <div class="stage"><div class="hero"><h1>我们应该在 剧本ai 中构建什么？</h1><div class="agent-status"><span id="agentState">正在检测 Codex agent…</span><span id="agentVersion"></span></div><pre class="agent-console" id="agentOutput" tabindex="0"></pre><div class="composer-wrap"><div class="composer"><textarea class="prompt-input" id="promptInput" placeholder="随心输入，回车发送给 Codex agent；Shift+Enter 换行"></textarea><div class="compose-row"><span>＋</span><span>☝ 请求批准⌄</span><span class="spacer"></span><b>自定义</b><span>超高⌄</span><button class="send" id="sendPrompt">↑</button></div></div><div class="meta"><span id="workspaceMeta">▱ 剧本ai⌄</span><span>▭ 本地模式⌄</span><span>⌘ main⌄</span></div></div></div></div>
+        <div class="stage"><div class="hero"><h1>今天想用 Codex 构建点什么？</h1><div class="agent-status"><span id="agentState">正在检测 Codex…</span><span id="agentVersion"></span></div><div class="agent-console" id="agentOutput" tabindex="0"></div><div class="composer-wrap"><div class="composer"><textarea class="prompt-input" id="promptInput" placeholder="随心输入，回车发送给 Codex；Shift+Enter 换行"></textarea><div class="compose-row"><span>＋</span><span class="spacer"></span><button class="send" id="sendPrompt">↑</button></div></div><div class="meta"><span id="workspaceMeta">▱ 未选择目录⌄</span><span>▭ 本地模式⌄</span></div></div></div></div>
         <aside class="tool-panel"><div class="tool-list"><div class="tool-card">▣ 审查 <span class="shortcut">⌃⇧G</span></div><div class="tool-card">▹ 终端</div><div class="tool-card">◎ 浏览器 <span class="shortcut">⌘T</span></div><div class="tool-card">▰ 文件 <span class="shortcut">⌘P</span></div></div></aside>
       </section>
-      <section class="terminal" id="terminal"><div class="terminal-tabs"><div class="tab">▹ 剧本ai</div><button class="icon-button">＋</button><button class="close" id="closeTerminal">×</button></div><pre id="terminalOutput" tabindex="0"></pre></section>
+      <section class="terminal" id="terminal"><div class="terminal-tabs"><div class="tab">▹ 终端</div><button class="icon-button">＋</button><button class="close" id="closeTerminal">×</button></div><pre id="terminalOutput" tabindex="0"></pre></section>
     </main>
   </div>
+  <script src="./renderer/ui/agentView.js"></script>
+  <script src="./renderer/ui/settings.js"></script>
   <script>
+    const api = window.openCodex;
+    const SESSION_ID = 'main';
+
     const shell = document.getElementById('stageShell');
     const terminal = document.getElementById('terminal');
     const out = document.getElementById('terminalOutput');
     const agentOut = document.getElementById('agentOutput');
     const input = document.getElementById('promptInput');
+
     let terminalId = null;
-    let agentId = null;
     let workspace = null;
+    let sessionStarted = false;
+
+    const settingsModal = window.SettingsModal.create(api);
+    const view = window.AgentView.create(agentOut, { onOpenSettings: openSettings });
+
+    function setState(text) {
+      document.getElementById('agentState').textContent = text;
+    }
+
+    function openSettings() {
+      settingsModal.open(() => {
+        sessionStarted = false; // engine is reset on save; start a fresh session next send
+        refreshStatus();
+      });
+    }
+
+    async function refreshStatus() {
+      const [status, cfg] = await Promise.all([api.checkEngine(), api.getConfig()]);
+      document.getElementById('agentVersion').textContent = status.version || status.command || '';
+      if (!status.available) {
+        setState('未找到 Codex CLI：请先在项目目录运行 npm install');
+        return;
+      }
+      if (!cfg.baseUrl && !cfg.hasApiKey) {
+        setState('请在「设置」中填写 Base URL 与 API Key');
+      } else {
+        setState('就绪');
+      }
+    }
+
+    async function ensureSession() {
+      if (sessionStarted) return true;
+      const res = await api.startEngine(SESSION_ID, { cwd: workspace || undefined });
+      if (res && res.error) return false; // error already surfaced via engine:event
+      sessionStarted = true;
+      return true;
+    }
+
+    async function sendPrompt() {
+      const text = input.value.trim();
+      if (!text) return;
+      const cfg = await api.getConfig();
+      if (!cfg.baseUrl && !cfg.hasApiKey) {
+        openSettings();
+        return;
+      }
+      view.addUserMessage(text);
+      input.value = '';
+      const ok = await ensureSession();
+      if (!ok) return;
+      api.sendPrompt(SESSION_ID, text);
+    }
 
     document.getElementById('toolsButton').onclick = () => {
       shell.classList.toggle('tools-open');
       document.getElementById('toolsButton').classList.toggle('active');
     };
-
-    async function startAgent() {
-      document.getElementById('agentState').textContent = '正在启动 Codex agent…';
-      const status = await window.openCodex.checkAgent();
-      document.getElementById('agentVersion').textContent = status.version || status.command;
-      if (!status.available) {
-        document.getElementById('agentState').textContent = '未找到 Codex CLI，请先 npm install 或安装 codex';
-        agentOut.textContent = `Codex agent not available: ${status.error || status.version || 'unknown error'}\n`;
-        return;
-      }
-      const session = await window.openCodex.startAgent({ cwd: workspace, approvalMode: 'on-request', sandboxMode: 'workspace-write' });
-      agentId = session.id;
-      document.getElementById('agentState').textContent = `Codex agent 已连接：${session.cwd}`;
-    }
-
+    document.getElementById('settingsButton').onclick = openSettings;
+    document.getElementById('newChatButton').onclick = () => {
+      view.clear();
+      sessionStarted = false;
+    };
     document.getElementById('workspaceButton').onclick = async () => {
-      const next = await window.openCodex.chooseWorkspace();
+      const next = await api.chooseWorkspace();
       if (!next) return;
       workspace = next;
-      document.getElementById('workspaceLabel').textContent = next.split(/[\/]/).pop() || next;
+      document.getElementById('workspaceLabel').textContent = next.split(/[\\/]/).pop() || next;
       document.getElementById('workspaceMeta').textContent = `▱ ${next}⌄`;
-      if (agentId) {
-        window.openCodex.disposeAgent(agentId);
-        agentId = null;
-        agentOut.textContent = '';
-      }
-      await startAgent();
+      sessionStarted = false; // new workspace -> new session
+      view.clear();
     };
-
-    async function sendPrompt() {
-      const prompt = input.value.trim();
-      if (!prompt) return;
-      if (!agentId) await startAgent();
-      if (!agentId) return;
-      agentOut.textContent += `\n› ${prompt}\n`;
-      window.openCodex.sendAgentPrompt(agentId, prompt);
-      input.value = '';
-      agentOut.scrollTop = agentOut.scrollHeight;
-    }
 
     document.getElementById('sendPrompt').onclick = sendPrompt;
     input.addEventListener('keydown', (event) => {
@@ -150,52 +229,45 @@
         sendPrompt();
       }
     });
-    window.openCodex.onAgentData(({ id, data }) => {
-      if (id !== agentId) return;
-      agentOut.textContent += data;
-      agentOut.scrollTop = agentOut.scrollHeight;
-    });
-    window.openCodex.onAgentExit(({ id, exitCode }) => {
-      if (id !== agentId) return;
-      agentOut.textContent += `\n[Codex agent exited with code ${exitCode}]\n`;
-      agentId = null;
-      document.getElementById('agentState').textContent = 'Codex agent 已退出';
+
+    api.onEngineEvent((event) => {
+      if (event.sessionId && event.sessionId !== SESSION_ID) return;
+      view.handleEvent(event);
     });
 
     async function openTerminal() {
       terminal.classList.add('open');
       document.getElementById('terminalButton').classList.add('active');
       if (!terminalId) {
-        const term = await window.openCodex.createTerminal(workspace);
+        const term = await api.createTerminal(workspace || undefined);
         terminalId = term.id;
       }
       out.focus();
     }
-
     document.getElementById('terminalButton').onclick = openTerminal;
     document.getElementById('closeTerminal').onclick = () => {
       terminal.classList.remove('open');
       document.getElementById('terminalButton').classList.remove('active');
     };
-    window.openCodex.onTerminalData(({ id, data }) => {
+    api.onTerminalData(({ id, data }) => {
       if (id !== terminalId) return;
       out.textContent += data;
       out.scrollTop = out.scrollHeight;
     });
-    window.openCodex.onTerminalExit(({ id, exitCode }) => {
+    api.onTerminalExit(({ id, exitCode }) => {
       if (id !== terminalId) return;
       out.textContent += `\n[process exited with code ${exitCode}]\n`;
       terminalId = null;
     });
     out.addEventListener('keydown', (event) => {
       if (!terminalId) return;
-      if (event.key === 'Enter') window.openCodex.writeTerminal(terminalId, '\r');
-      else if (event.key === 'Backspace') window.openCodex.writeTerminal(terminalId, '\u007f');
-      else if (event.key.length === 1) window.openCodex.writeTerminal(terminalId, event.key);
+      if (event.key === 'Enter') api.writeTerminal(terminalId, '\r');
+      else if (event.key === 'Backspace') api.writeTerminal(terminalId, '');
+      else if (event.key.length === 1) api.writeTerminal(terminalId, event.key);
       event.preventDefault();
     });
 
-    startAgent();
+    refreshStatus();
   </script>
 </body>
 </html>
