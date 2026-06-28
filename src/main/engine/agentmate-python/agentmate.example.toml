@@ -1,0 +1,31 @@
+# AgentMate configuration for Open Codex
+# Copy this to agentmate.toml and fill in your credentials.
+
+default_profile = "deepseek"
+
+[profiles.deepseek]
+model = "deepseek-chat"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+temperature = 0.2
+timeout = 120
+
+[profiles.openai]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+temperature = 0.2
+timeout = 120
+
+[agent]
+system_prompt = "You are a helpful coding assistant. Use tools when needed to search the web or write files. Always respond in the user's language."
+max_iterations = 12
+max_tool_result_chars = 8000
+context_char_budget = 120000
+workspace_dir = "./workspace"
+
+[tools.web_search]
+api_key_env = "TAVILY_API_KEY"
+
+[tools.web_fetch]
+api_key_env = "TAVILY_API_KEY"

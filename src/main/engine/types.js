@@ -20,7 +20,7 @@
  * @property {'in_progress'|'completed'|'failed'|'declined'} [status]
  *
  * @typedef {Object} EngineEvent
- * @property {'thread_started'|'turn_started'|'item'|'turn_completed'|'turn_failed'|'approval_request'|'error'} kind
+ * @property {'thread_started'|'turn_started'|'item'|'turn_completed'|'turn_failed'|'turn_interrupted'|'approval_request'|'error'} kind
  * @property {string} [sessionId]   local session id this event belongs to
  * @property {string} [threadId]    engine thread id (resume key)
  * @property {'started'|'updated'|'completed'} [phase]  for kind === 'item'
@@ -32,6 +32,7 @@
 
 /** @enum {string} */
 const EngineMode = Object.freeze({
+  AGENTMATE: 'agentmate',
   SDK: 'sdk',
   APP_SERVER: 'app-server',
 });

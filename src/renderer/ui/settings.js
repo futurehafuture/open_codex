@@ -64,9 +64,43 @@
         'API Key',
         'password',
         '',
-        cfg.hasApiKey ? '已保存（留空则保持不变）' : 'sk-...',
+        cfg.hasApiKey ? '已保存（未显示，留空则保持不变）' : 'sk-...',
       );
       const model = field(modal, '模型（可选）', 'text', cfg.model, '如 gpt-4o、deepseek-chat');
+
+      // Engine mode — radio group -------------------------------------------
+      const modeWrap = el('label', 'settings-field');
+      modeWrap.appendChild(el('span', 'settings-label', '引擎模式'));
+      const modeRow = el('div', 'settings-radio-row');
+      const sdkLabel = el('label', 'settings-radio-label');
+      const sdkRadio = document.createElement('input');
+      sdkRadio.type = 'radio';
+      sdkRadio.name = 'engineMode';
+      const amLabel = el('label', 'settings-radio-label');
+      const amRadio = document.createElement('input');
+      amRadio.type = 'radio';
+      amRadio.name = 'engineMode';
+      amRadio.value = 'agentmate';
+      amRadio.checked = !cfg.engineMode || cfg.engineMode === 'agentmate';
+      amLabel.appendChild(amRadio);
+      amLabel.appendChild(el('span', null, 'AgentMate（通用兼容，DeepSeek 等）'));
+      modeRow.appendChild(amLabel);
+      sdkRadio.value = 'sdk';
+      sdkRadio.checked = cfg.engineMode === 'sdk';
+      sdkLabel.appendChild(sdkRadio);
+      sdkLabel.appendChild(el('span', null, 'Codex SDK（OpenAI 专用）'));
+      modeRow.appendChild(sdkLabel);
+      const asLabel = el('label', 'settings-radio-label');
+      const asRadio = document.createElement('input');
+      asRadio.type = 'radio';
+      asRadio.name = 'engineMode';
+      asRadio.value = 'app-server';
+      asRadio.checked = cfg.engineMode === 'app-server';
+      asLabel.appendChild(asRadio);
+      asLabel.appendChild(el('span', null, 'Codex App-Server（交互式审批）'));
+      modeRow.appendChild(asLabel);
+      modeWrap.appendChild(modeRow);
+      modal.appendChild(modeWrap);
 
       const errLine = el('div', 'settings-error');
       modal.appendChild(errLine);
@@ -77,7 +111,8 @@
       cancel.addEventListener('click', () => this.close());
       save.addEventListener('click', async () => {
         errLine.textContent = '';
-        const patch = { baseUrl: baseUrl.value.trim(), model: model.value.trim() };
+        const engineMode = amRadio.checked ? 'agentmate' : (sdkRadio.checked ? 'sdk' : 'app-server');
+        const patch = { baseUrl: baseUrl.value.trim(), model: model.value.trim(), engineMode };
         if (apiKey.value !== '') patch.apiKey = apiKey.value.trim(); // empty = keep existing
         const res = await this.api.saveConfig(patch);
         if (!res || !res.ok) {

@@ -93,6 +93,18 @@ function listMessages(threadId) {
   return db.prepare('SELECT * FROM messages WHERE thread_id = ? ORDER BY id ASC').all(threadId);
 }
 
+/** Delete a thread and all of its messages (no FK cascade, so do it manually). */
+function deleteThread(threadId) {
+  const db = getDb();
+  if (!db || !threadId) return false;
+  const tx = db.transaction((id) => {
+    db.prepare('DELETE FROM messages WHERE thread_id = ?').run(id);
+    db.prepare('DELETE FROM threads WHERE id = ?').run(id);
+  });
+  tx(threadId);
+  return true;
+}
+
 module.exports = {
   ensureProject,
   listProjects,
@@ -105,5 +117,6 @@ module.exports = {
   appendUserMessage,
   appendItem,
   listMessages,
+  deleteThread,
   close,
 };

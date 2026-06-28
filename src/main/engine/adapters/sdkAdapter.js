@@ -1,6 +1,6 @@
 'use strict';
 
-const { createLogger } = require('../util/logger');
+const { createLogger } = require('../../util/logger');
 
 const log = createLogger('engine:sdk');
 

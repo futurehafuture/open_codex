@@ -1,8 +1,8 @@
 'use strict';
 
 const { spawn } = require('child_process');
-const { JsonRpcChannel } = require('./jsonRpc');
-const { createLogger } = require('../util/logger');
+const { JsonRpcChannel } = require('../jsonRpc');
+const { createLogger } = require('../../util/logger');
 
 const log = createLogger('engine:app-server');
 
@@ -35,6 +35,8 @@ class AppServerAdapter {
     this.threadToSession = new Map();
     /** pending server requestId -> threadId (for approval routing) */
     this.pendingApprovals = new Map();
+    /** `${threadId}:${itemId}` -> accumulated agent text for delta notifications */
+    this.itemTextBuffers = new Map();
   }
 
   supportsInteractiveApproval() {
@@ -46,10 +48,17 @@ class AppServerAdapter {
     const env = { ...process.env };
     // CODEX_API_KEY is the variable the codex CLI reads (same as the SDK path).
     if (this.opts.apiKey) env.CODEX_API_KEY = this.opts.apiKey;
-    // NOTE: base URL wiring for app-server is unverified. The SDK passes
-    // `--config openai_base_url=...` to `codex exec`; whether `codex app-server`
-    // honors the same override has not been validated yet. Revisit in M2.
-    const child = spawn(this.opts.codexPath, ['app-server'], {
+
+    // Build CLI args. `codex app-server` accepts `--config` overrides matching
+    // the `codex exec` path: `--config openai_base_url=<url>`.
+    const args = ['app-server'];
+    if (this.opts.baseUrl) {
+      args.push('--config', `openai_base_url=${this.opts.baseUrl}`);
+      // Also set OPENAI_BASE_URL as a fallback env var (defense in depth).
+      env.OPENAI_BASE_URL = this.opts.baseUrl;
+    }
+
+    const child = spawn(this.opts.codexPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
     });
@@ -120,7 +129,11 @@ class AppServerAdapter {
    * @param {string|object} decision e.g. 'accept', 'acceptForSession', 'decline', 'cancel'
    */
   respondApproval(requestId, decision) {
-    if (!this.rpc) return;
+    if (!this.rpc) {
+      log.warn(`Cannot respond to approval ${requestId}: app-server not connected`);
+      this.onEvent({ kind: 'error', message: '审批响应失败：引擎未连接，请检查 app-server 是否正常运行。' });
+      return;
+    }
     this.rpc.respond(requestId, { decision });
     this.pendingApprovals.delete(requestId);
   }
@@ -145,6 +158,8 @@ class AppServerAdapter {
     this.initialized = false;
     this.sessionToThread.clear();
     this.threadToSession.clear();
+    this.pendingApprovals.clear();
+    this.itemTextBuffers.clear();
   }
 
   _onNotification(method, params) {
@@ -163,17 +178,26 @@ class AppServerAdapter {
       case 'item/updated':
       case 'item/completed': {
         const phase = method.split('/')[1];
-        this.onEvent({ kind: 'item', sessionId, phase, item: normalizeAppServerItem(params.item || params) });
+        const item = normalizeAppServerItem(params.item || params);
+        if (item.id && item.type === 'agent_message' && item.text) {
+          this.itemTextBuffers.set(`${params.threadId}:${item.id}`, item.text);
+        }
+        this.onEvent({ kind: 'item', sessionId, phase, item });
+        if (phase === 'completed' && item.id) this.itemTextBuffers.delete(`${params.threadId}:${item.id}`);
         return;
       }
-      case 'item/agentMessage/delta':
+      case 'item/agentMessage/delta': {
+        const key = `${params.threadId}:${params.itemId}`;
+        const text = `${this.itemTextBuffers.get(key) || ''}${params.delta || ''}`;
+        this.itemTextBuffers.set(key, text);
         this.onEvent({
           kind: 'item',
           sessionId,
           phase: 'updated',
-          item: { id: params.itemId, type: 'agent_message', text: params.delta, status: 'in_progress' },
+          item: { id: params.itemId, type: 'agent_message', text, status: 'in_progress' },
         });
         return;
+      }
       default:
         log.debug(`unhandled notification ${method}`);
     }

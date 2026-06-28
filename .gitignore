@@ -19,6 +19,12 @@ logs/
 # Local tooling / session state
 .claude/logs/
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+uv.lock
+
 # OS cruft
 .DS_Store
 Thumbs.db

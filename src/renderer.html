@@ -4,169 +4,520 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Open Codex</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif; --line:#e8e8e8; --muted:#8b8f97; --panel:#f7f7f8; --soft:#f3f3f4; --text:#202124; }
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      --serif: "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif SC", Georgia, "Times New Roman", serif;
+      --bg:#ffffff; --sidebar:#f5f3ef; --hover:#ece9e2;
+      --line:#e9e6df; --muted:#8c877e; --faint:#b4afa4; --panel:#f6f4ef; --soft:#f1eee8; --text:#2b2926;
+      --accent:#cc6d4e;
+    }
     * { box-sizing: border-box; }
-    body { margin:0; height:100vh; overflow:hidden; color:var(--text); background:white; }
+    body { margin:0; height:100vh; overflow:hidden; color:var(--text); background:var(--bg); }
     button { font:inherit; border:0; background:none; cursor:pointer; color:inherit; }
-    .app { display:grid; grid-template-columns: 348px 1fr; height:100vh; }
-    .sidebar { background:#f6f6f7; border-right:1px solid #ddd; padding:68px 22px 22px; display:flex; flex-direction:column; gap:18px; overflow:auto; }
-    .traffic { position:fixed; top:18px; left:16px; display:flex; gap:14px; -webkit-app-region:drag; }
-    .dot { width:20px; height:20px; border-radius:50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); } .red{background:#ff5f57}.yellow{background:#ffbd2e}.green{background:#28c840}
-    .side-actions, .project-list { display:grid; gap:18px; }
-    .nav-row { display:flex; align-items:center; gap:14px; font-size:20px; font-weight:650; }
-    .nav-row.clickable { cursor:pointer; }
-    .nav-row.clickable:hover { color:#000; }
-    .section { margin-top:24px; color:#a4a7ac; font-size:20px; font-weight:700; }
-    .conversation { padding-left:42px; color:#c3c5c8; font-size:18px; line-height:1.3; }
-    .history { margin-left:42px; display:grid; gap:18px; font-size:19px; }
-    .history-row { display:flex; justify-content:space-between; gap:20px; }
-    .history-row.clickable { cursor:pointer; }
-    .history-row.clickable:hover .thread-title { color:#000; }
-    .thread-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .time { color:#8e9298; white-space:nowrap; }
-    .settings { margin-top:auto; }
-    .main { display:grid; grid-template-rows:56px 1fr auto; min-width:0; }
-    .topbar { height:56px; display:flex; align-items:center; justify-content:flex-end; gap:14px; padding:0 18px; border-bottom:1px solid transparent; -webkit-app-region:drag; }
-    .pill { -webkit-app-region:no-drag; display:flex; align-items:center; gap:10px; padding:8px 15px; border:1px solid var(--line); border-radius:16px; font-size:20px; font-weight:750; box-shadow:0 1px 5px rgba(0,0,0,.04); background:white; }
-    .cube { width:22px; height:22px; border-radius:6px; background:#191919; color:white; display:grid; place-items:center; font-size:13px; }
-    .icon-button { -webkit-app-region:no-drag; width:32px; height:32px; border-radius:10px; display:grid; place-items:center; color:#6e737a; }
-    .icon-button.active, .icon-button:hover { background:#f0f0f1; color:#111; }
-    .stage-shell { display:grid; grid-template-columns:1fr 0; min-height:0; transition:grid-template-columns .22s ease; }
-    .stage-shell.tools-open { grid-template-columns:minmax(520px, 1fr) 560px; }
-    .stage { min-width:0; display:flex; align-items:center; justify-content:center; padding:40px 54px; transition:border .22s ease; overflow:auto; }
+    .app { display:grid; grid-template-columns: 260px 1fr; height:100vh; transition:grid-template-columns .2s ease; }
+    .app.sidebar-collapsed { grid-template-columns: 0 1fr; }
+    .app.sidebar-collapsed .sidebar { padding-left:0; padding-right:0; }
+
+    /* Sidebar ------------------------------------------------------------- */
+    .sidebar { background:var(--sidebar); border-right:1px solid var(--line); padding:44px 10px 0; display:flex; flex-direction:column; gap:2px; overflow:auto; }
+    .sidebar::-webkit-scrollbar { width:8px; }
+    .sidebar::-webkit-scrollbar-thumb { background:#dcd8cf; border-radius:8px; }
+    /* Sits to the RIGHT of the native macOS window buttons (trafficLightPosition x:16). */
+    .traffic { position:fixed; top:11px; left:86px; display:flex; align-items:center; gap:4px; -webkit-app-region:drag; z-index:5; }
+    .ghost-icon { -webkit-app-region:no-drag; width:28px; height:28px; border-radius:8px; display:grid; place-items:center; color:var(--muted); cursor:pointer; }
+    .ghost-icon:hover { background:var(--hover); color:var(--text); }
+
+    .seg { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; background:#e9e6df; border-radius:11px; padding:3px; margin:2px 4px 8px; }
+    .seg-item { display:flex; align-items:center; justify-content:center; gap:6px; height:30px; border-radius:8px; font-size:12.5px; font-weight:600; color:var(--muted); transition:background .15s ease, color .15s ease, box-shadow .15s ease; }
+    .seg-item svg { width:15px; height:15px; }
+    .seg-item:hover { color:var(--text); }
+    .seg-item.active { background:var(--bg); color:var(--text); box-shadow:0 1px 2px rgba(60,50,40,.12); }
+
+    .side-nav { display:grid; gap:1px; }
+    .side-nav .nav-row { display:flex; align-items:center; gap:11px; height:34px; padding:0 8px; border-radius:9px; font-size:13.5px; font-weight:550; color:#43403a; cursor:pointer; }
+    .side-nav .nav-row:hover { background:var(--hover); }
+    .nav-icon { width:18px; flex:0 0 18px; display:grid; place-items:center; color:#6c685f; }
+    .nav-icon svg { width:17px; height:17px; }
+
+    .section { margin:12px 8px 4px; color:var(--faint); font-size:11.5px; font-weight:600; }
+    .project-list { display:grid; gap:1px; padding-bottom:8px; }
+    /* sidebar.js renders project group-headers + thread rows here; keep them
+       quiet + flat so they read like Claude's "Recents", not the top nav. */
+    #projectList .nav-row { display:flex; align-items:center; gap:7px; min-height:22px; padding:5px 8px 2px; font-size:11px; font-weight:600; color:var(--faint); letter-spacing:.02em; }
+    #projectList .nav-row .nav-icon { color:var(--faint); font-size:11px; width:auto; flex:0 0 auto; }
+    .conversation { padding:2px 8px 6px 15px; color:var(--faint); font-size:12px; }
+    .history { display:grid; gap:1px; padding-left:0; min-width:0; }
+    .history-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 8px; border-radius:9px; color:#48443d; min-width:0; cursor:pointer; }
+    .history-row:hover { background:var(--hover); }
+    .thread-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; min-width:0; }
+    .history-row:hover .thread-title { color:var(--text); }
+    .row-right { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+    .time { color:var(--faint); white-space:nowrap; font-size:11px; font-weight:500; }
+    .thread-del { -webkit-app-region:no-drag; opacity:0; color:var(--faint); font-size:15px; line-height:1; padding:0 2px; transition:opacity .12s ease, color .12s ease; }
+    .history-row:hover .thread-del { opacity:1; }
+    .thread-del:hover { color:#b3261e; }
+
+    .side-foot { margin-top:auto; position:sticky; bottom:0; background:var(--sidebar); padding:8px 0 10px; display:grid; gap:1px; }
+    .side-foot .nav-row { display:flex; align-items:center; gap:11px; height:34px; padding:0 8px; border-radius:9px; font-size:13.5px; font-weight:550; color:#43403a; cursor:pointer; }
+    .side-foot .nav-row:hover { background:var(--hover); }
+    .account-row { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:10px; cursor:pointer; margin-top:2px; }
+    .account-row:hover { background:var(--hover); }
+    .avatar { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; background:var(--accent); color:#fff; font-size:12px; font-weight:700; flex:0 0 26px; }
+    .account-copy { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
+    .account-copy strong { font-size:13px; font-weight:600; }
+    .account-copy span { color:var(--muted); font-size:11px; }
+    .account-chevron { margin-left:auto; color:var(--faint); font-size:11px; }
+    /* Main ---------------------------------------------------------------- */
+    /* min-height:0 stops the message console's content from forcing this grid
+       item taller than the viewport (which pushed the composer off-screen). */
+    .main { display:grid; grid-template-rows:44px 1fr auto; min-width:0; min-height:0; background:var(--bg); }
+    .topbar { height:44px; display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:0 16px; -webkit-app-region:drag; }
+    .icon-button { -webkit-app-region:no-drag; width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:var(--muted); font-size:16px; }
+    .icon-button.active, .icon-button:hover { background:var(--soft); color:var(--text); }
+    .brand-mark { -webkit-app-region:no-drag; margin-left:6px; color:var(--accent); font-size:17px; line-height:1; user-select:none; }
+
+    /* Row is minmax(0,1fr) (not the implicit `auto`) so the stage is bounded to
+       the viewport height; the message console then scrolls instead of growing. */
+    .stage-shell { display:grid; grid-template-columns:1fr 0; grid-template-rows:minmax(0, 1fr); min-height:0; transition:grid-template-columns .22s ease; }
+    .stage-shell.tools-open { grid-template-columns:minmax(420px, 1fr) 380px; }
+    .stage { min-width:0; display:flex; align-items:center; justify-content:center; padding:24px 36px 60px; transition:border .22s ease; overflow:auto; }
     .tools-open .stage { border-right:1px solid var(--line); }
-    .hero { width:min(1040px, 92%); display:grid; gap:20px; justify-items:center; }
-    .tools-open .hero { width:min(620px, 92%); }
-    h1 { margin:0; font-size:38px; line-height:1.15; font-weight:500; text-align:center; letter-spacing:-.03em; }
-    .composer-wrap { width:100%; border-radius:28px; background:#f5f5f5; box-shadow:0 18px 35px rgba(0,0,0,.06); }
-    .composer { min-height:120px; border:1px solid #dedede; border-radius:28px; background:white; padding:18px 24px 14px; display:grid; grid-template-rows:1fr auto; }
-    .prompt-input { width:100%; min-height:48px; resize:none; border:0; outline:0; color:#222; font-size:19px; line-height:1.5; font-family:inherit; }
-    .prompt-input::placeholder { color:#c7c9cc; font-weight:650; }
-    .compose-row { display:flex; align-items:center; gap:16px; color:#777d84; font-size:19px; }
+    .hero { width:min(760px, 92%); display:grid; gap:22px; justify-items:center; }
+    .tools-open .hero { width:min(520px, 92%); }
+    .stage-shell.conversation-active .stage { align-items:stretch; padding:14px 36px 24px; overflow:hidden; }
+    .stage-shell.conversation-active .hero { width:min(920px, 96%); height:100%; min-height:0; grid-template-rows:auto minmax(0, 1fr) auto; gap:14px; align-content:stretch; }
+    /* In a live conversation only the status / console / composer remain; the
+       home-only greeting, suggestion pills and meta row collapse out. */
+    .stage-shell.conversation-active .greeting-wrap,
+    .stage-shell.conversation-active .suggestions,
+    .stage-shell.conversation-active .meta { display:none; }
+    /* Explicit row placement — agent-status is display:none after each turn, so
+       relying on order + auto-placement would drop the console into the `auto`
+       track and let it grow unbounded, pushing the composer off-screen. */
+    .stage-shell.conversation-active .agent-status { grid-row:1; }
+    .stage-shell.conversation-active .agent-console { grid-row:2; }
+    .stage-shell.conversation-active .composer-wrap { grid-row:3; }
+    .tools-open.conversation-active .hero { width:min(720px, 96%); }
+
+    .greeting-wrap { display:grid; gap:9px; justify-items:center; text-align:center; }
+    h1 { margin:0; font-family:var(--serif); font-size:40px; line-height:1.08; font-weight:500; text-align:center; letter-spacing:.01em; color:var(--text); }
+    .spark { color:var(--accent); margin-right:8px; font-family:var(--serif); }
+    .greeting-sub { margin:0; color:var(--muted); font-size:13.5px; }
+    .workspace-name { white-space:nowrap; color:#5c574e; font-weight:600; }
+
+    .composer-wrap { width:100%; }
+    .composer { min-height:108px; border:1px solid var(--line); border-radius:20px; background:var(--bg); padding:16px 18px 12px; display:grid; grid-template-rows:1fr auto; box-shadow:0 2px 12px rgba(70,55,40,.05); transition:border-color .15s ease, box-shadow .15s ease; }
+    .composer:focus-within { border-color:#d9cfc0; box-shadow:0 6px 22px rgba(70,55,40,.09); }
+    .prompt-input { width:100%; min-height:46px; resize:none; border:0; outline:0; color:var(--text); font-size:15px; line-height:1.55; font-family:inherit; background:transparent; }
+    .prompt-input::placeholder { color:var(--faint); }
+    .compose-row { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; min-height:34px; }
+    .compose-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap; height:30px; padding:0 8px; border-radius:8px; cursor:pointer; }
+    .compose-action:hover { background:var(--soft); color:var(--text); }
+    .compose-plus { width:32px; height:32px; padding:0; border:1px solid var(--line); border-radius:50%; font-size:16px; }
+    .compose-plus:hover { background:var(--soft); }
+    .model-chip { display:inline-flex; align-items:center; gap:5px; color:var(--text); font-size:12.5px; font-weight:600; white-space:nowrap; height:30px; padding:0 9px; border-radius:8px; cursor:pointer; }
+    .model-chip:hover { background:var(--soft); }
+    .model-chip .muted { color:var(--muted); font-weight:500; }
     .spacer { flex:1; }
-    .send { width:46px; height:46px; border-radius:50%; background:#111; color:white; display:grid; place-items:center; font-size:20px; }
-    .meta { height:56px; display:flex; align-items:center; gap:26px; padding:0 26px; color:#7b8087; font-size:18px; font-weight:650; }
+    .send { width:34px; height:34px; border-radius:50%; background:var(--text); color:var(--bg); display:grid; place-items:center; font-size:16px; line-height:1; transition:background .16s ease, transform .16s ease; }
+    .send:hover { background:#000; transform:translateY(-1px); }
+    .send.stop { background:#27292d; font-size:13px; }
+    .send.stop:hover { background:#b3261e; }
+    .send.stopping { background:#c7c9cc; cursor:wait; }
+
+    .suggestions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+    .pill { display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 14px; border:1px solid var(--line); border-radius:11px; background:var(--bg); color:#4b463e; font-size:13px; font-weight:550; cursor:pointer; transition:background .14s ease, border-color .14s ease, transform .14s ease; }
+    .pill:hover { background:var(--soft); border-color:#ddd4c6; transform:translateY(-1px); }
+    .pill svg { width:15px; height:15px; color:var(--accent); }
+
+    .meta { display:flex; align-items:center; justify-content:center; gap:16px; padding:2px 4px 0; color:var(--muted); font-size:12px; font-weight:500; }
+    .meta-item { display:flex; align-items:center; gap:6px; min-width:0; white-space:nowrap; }
+    .meta-item.clickable { cursor:pointer; }
+    .meta-item.clickable:hover { color:var(--text); }
+    .meta-item strong { color:#5c574e; font-weight:600; }
+    .meta-icon { color:var(--muted); font-size:13px; line-height:1; }
+    .chevron { color:var(--faint); font-size:11px; }
+
+    .toast { position:fixed; left:50%; bottom:30px; transform:translateX(-50%) translateY(8px); background:#2b2926; color:#fff; font-size:12.5px; padding:9px 15px; border-radius:10px; opacity:0; pointer-events:none; transition:opacity .18s ease, transform .18s ease; z-index:80; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
     /* Structured agent console -------------------------------------------------- */
-    .agent-console { width:100%; height:340px; border:1px solid var(--line); border-radius:18px; background:#fbfbfc; color:var(--text); padding:14px; overflow:auto; text-align:left; font-size:15px; line-height:1.5; box-shadow:0 18px 35px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:10px; }
-    .agent-console:empty::before { content:'输入下方问题，Codex 的回复会在这里按消息 / 命令 / 文件改动分类展示。'; color:#b8bcc2; }
+    .agent-console { width:100%; max-height:320px; border:none; background:transparent; color:var(--text); padding:0; overflow:auto; text-align:left; font-size:13px; line-height:1.6; display:flex; flex-direction:column; gap:10px; min-height:0; }
+    .agent-console:empty { display:none; }
+    .stage-shell.conversation-active .agent-console { display:flex; max-height:none; min-height:0; }
     .msg { display:flex; }
     .msg.user { justify-content:flex-end; }
-    .msg .bubble { max-width:86%; padding:9px 13px; border-radius:14px; white-space:pre-wrap; word-break:break-word; }
+    .msg .bubble { max-width:86%; padding:8px 12px; border-radius:10px; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
     .msg.user .bubble { background:#111; color:#fff; }
-    .msg.agent .bubble { background:#eef0f2; color:var(--text); }
-    .block { font-size:14px; }
-    .reasoning { background:#f3f3f5; border-radius:10px; padding:6px 12px; color:#5a5f66; }
-    .reasoning summary { cursor:pointer; font-weight:600; }
-    .reason-body { margin-top:6px; white-space:pre-wrap; word-break:break-word; }
-    .block.command_execution { background:#0f1115; color:#e6e6e6; border-radius:10px; padding:10px 12px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .cmd-head { display:flex; align-items:center; gap:8px; }
+    .msg.agent .bubble { background:transparent; color:var(--text); }
+    .msg.user .bubble { white-space:pre-wrap; }
+    .msg.agent .bubble { white-space:normal; }
+    /* Markdown rendered content inside agent bubbles */
+    .msg.agent .bubble p { margin:0 0 8px; }
+    .msg.agent .bubble p:last-child { margin-bottom:0; }
+    .msg.agent .bubble h1,
+    .msg.agent .bubble h2,
+    .msg.agent .bubble h3,
+    .msg.agent .bubble h4 { margin:12px 0 6px; font-weight:600; line-height:1.35; }
+    .msg.agent .bubble h1 { font-size:1.4em; }
+    .msg.agent .bubble h2 { font-size:1.25em; }
+    .msg.agent .bubble h3 { font-size:1.1em; }
+    .msg.agent .bubble h4 { font-size:1em; }
+    .msg.agent .bubble code { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:0.9em; background:rgba(0,0,0,.06); padding:1px 5px; border-radius:4px; }
+    .msg.agent .bubble pre { margin:8px 0; padding:10px 12px; background:rgba(0,0,0,.04); border-radius:8px; overflow-x:auto; font-size:0.92em; line-height:1.5; }
+    .msg.agent .bubble pre code { background:none; padding:0; border-radius:0; font-size:inherit; }
+    .msg.agent .bubble ul, .msg.agent .bubble ol { margin:4px 0 8px; padding-left:20px; }
+    .msg.agent .bubble li { margin-bottom:3px; }
+    .msg.agent .bubble a { color:#2456b8; text-decoration:underline; }
+    .msg.agent .bubble blockquote { margin:8px 0; padding:4px 12px; border-left:3px solid #d0d5dd; color:#5d6068; }
+    .msg.agent .bubble table { border-collapse:collapse; margin:8px 0; width:100%; font-size:0.95em; }
+    .msg.agent .bubble th, .msg.agent .bubble td { border:1px solid #d8dce3; padding:5px 10px; text-align:left; }
+    .msg.agent .bubble th { background:rgba(0,0,0,.03); font-weight:600; }
+    .msg.agent .bubble hr { border:none; border-top:1px solid #e0e3e8; margin:12px 0; }
+    .msg.agent .bubble strong { font-weight:600; }
+    .block { font-size:13px; padding:3px 0; }
+    .block.reasoning, .block.mcp_tool_call, .block.web_search { padding:0; }
+    /* Reasoning — whisper-quiet thinking trace.
+       Looks like a soft annotation, not a structural card. */
+    .reasoning { margin:1px 0; border:none; padding:2px 0; background:transparent; }
+    .reasoning-summary { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-size:11.5px; color:#b8b2a8; list-style:none; height:20px; }
+    .reasoning-summary::-webkit-details-marker { display:none; }
+    .reasoning-summary::marker { display:none; content:''; }
+    .reasoning-dot { width:4px; height:4px; border-radius:50%; background:#d9d4cc; flex:0 0 4px; transition:all .35s ease; }
+    .reasoning-dot.live { background:#cc6d4e; animation:think-glow 1.6s ease-in-out infinite; }
+    @keyframes think-glow { 0%,100%{opacity:.3;box-shadow:0 0 0 0 rgba(204,109,78,.25)} 50%{opacity:1;box-shadow:0 0 2px 1px rgba(204,109,78,.15)} }
+    .reasoning-label { font-weight:450; }
+    .reasoning-meta { font-size:10.5px; color:#cfc9c0; }
+    .reasoning-body { margin:4px 0 8px 6px; padding:6px 12px; border-radius:8px; background:#f9f8f7; white-space:pre-wrap; word-break:break-word; color:#787069; font-size:11.5px; line-height:1.65; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height:300px; overflow-y:auto; }
+    .block.command_execution { background:#0f1115; color:#e6e6e6; border-radius:8px; padding:8px 10px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .cmd-head { display:flex; align-items:center; gap:6px; }
     .cmd-prompt { color:#7ee787; } .cmd-line { word-break:break-all; }
-    .exit { margin-left:auto; font-size:12px; padding:1px 8px; border-radius:10px; } .exit.ok{background:#1f6f3f;color:#fff} .exit.bad{background:#a33;color:#fff}
-    .cmd-out { margin:8px 0 0; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; color:#cfd3d8; }
-    .block-title { font-weight:700; margin-bottom:6px; color:#3a3f45; }
-    .file-list, .todo-list { display:grid; gap:5px; }
-    .file-row { display:flex; align-items:center; gap:10px; }
-    .tag { font-size:12px; padding:1px 8px; border-radius:8px; background:#e8e8ea; }
+    .exit { margin-left:auto; font-size:11px; padding:1px 6px; border-radius:8px; } .exit.ok{background:#1f6f3f;color:#fff} .exit.bad{background:#a33;color:#fff}
+    .cmd-out { margin:6px 0 0; white-space:pre-wrap; word-break:break-word; max-height:180px; overflow:auto; color:#cfd3d8; font-size:12px; }
+    .block-title { font-weight:700; margin-bottom:4px; color:#3a3f45; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+    .file-list, .todo-list { display:grid; gap:3px; }
+    .file-row { display:flex; align-items:center; gap:8px; }
+    .tag { font-size:11px; padding:1px 6px; border-radius:6px; background:#e8e8ea; font-weight:600; }
     .tag.add{background:#dff5e3;color:#1f6f3f} .tag.delete{background:#fbe2e2;color:#a33} .tag.update{background:#e6eefb;color:#2456b8}
     .file-path { font-family:ui-monospace, Menlo, monospace; word-break:break-all; }
     .todo-list { list-style:none; padding:0; margin:0; }
     .todo-list li { display:flex; gap:8px; align-items:flex-start; }
     .todo-list li.done .todo-text { color:#9aa0a6; text-decoration:line-through; }
-    .block.error { background:#fff4f4; border:1px solid #f3caca; border-radius:10px; padding:10px 12px; }
+    .block.error { background:#fff4f4; border:1px solid #f3caca; border-radius:8px; padding:8px 10px; }
+    .block.notice { align-self:center; background:#f4f4f5; color:#7b8087; font-size:12px; padding:4px 10px; border-radius:999px; }
     .error-body { color:#b3261e; white-space:pre-wrap; word-break:break-word; }
-    .error-hint { color:#8a6d3b; margin-top:6px; font-size:13px; }
-    .error-btn { margin-top:8px; padding:6px 12px; border-radius:8px; background:#111; color:#fff; font-size:13px; }
-    .thinking { color:#9aa0a6; font-size:13px; }
-    .agent-status { width:100%; display:flex; justify-content:space-between; gap:16px; color:#7b8087; font-size:14px; }
+    .error-hint { color:#8a6d3b; margin-top:4px; font-size:12px; }
+    .error-btn { margin-top:6px; padding:4px 10px; border-radius:6px; background:#111; color:#fff; font-size:12px; }
+    .error-count { color:#b3261e; font-weight:700; }
+    .error-detail { margin-top:6px; }
+    .error-detail summary { cursor:pointer; color:#8a6d3b; font-size:12px; user-select:none; }
+    .error-raw { margin-top:4px; color:#9a6a6a; font-size:11.5px; white-space:pre-wrap; word-break:break-word; font-family:ui-monospace, Menlo, monospace; }
+    /* Collapse blocks/bubbles that ended up with no content (empty agent
+       messages, empty reasoning) so they don't render as floating gray ovals. */
+    .agent-console .block:empty { display:none; padding:0; }
+    .msg .bubble:empty { display:none; }
+    .thinking { color:#8c877e; font-size:12.5px; display:flex; align-items:center; gap:7px; padding:2px 0; }
+    .thinking::before { content:''; display:block; width:8px; height:8px; border-radius:50%; background:#cc6d4e; animation:think-pulse 1.2s ease-in-out infinite; }
+    .agent-status { width:100%; display:none; justify-content:space-between; gap:12px; color:#7b8087; font-size:12px; }
+    .agent-status.visible { display:flex; }
+
+    /* Tool-call — compact inline pill */
+    .tool-call { display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 10px; border-radius:14px; background:#f4f3f0; font-size:12.5px; color:#58544c; max-width:100%; margin:1px 0; }
+    .tool-call.running { background:#fdf6f0; }
+    .tool-call.ok { background:#f2f5f0; }
+    .tool-call.bad { background:#fef4f4; }
+    .tool-call.search { background:#f0f4fb; }
+    .tool-call-icon { flex:0 0 auto; font-size:13px; line-height:1; display:grid; place-items:center; width:16px; }
+    .tc-spin { display:block; width:12px; height:12px; border:2px solid #d9cbb8; border-top-color:#cc6d4e; border-radius:50%; animation: tc-rot .7s linear infinite; }
+    @keyframes tc-rot { to { transform:rotate(360deg); } }
+    .tool-call-name { font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .tool-call-args { font-size:11px; color:#8c877e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; margin-left:2px; }
 
     /* Settings modal ------------------------------------------------------------ */
     .settings-overlay { position:fixed; inset:0; background:rgba(0,0,0,.36); display:grid; place-items:center; z-index:50; }
     .settings-modal { width:min(520px, 92%); background:#fff; border-radius:16px; padding:24px; box-shadow:0 30px 60px rgba(0,0,0,.25); display:grid; gap:14px; }
-    .settings-title { margin:0; font-size:22px; }
-    .settings-sub { margin:0; color:#7b8087; font-size:14px; line-height:1.5; }
-    .settings-field { display:grid; gap:6px; }
-    .settings-label { font-size:14px; font-weight:600; color:#3a3f45; }
-    .settings-input { height:40px; border:1px solid var(--line); border-radius:10px; padding:0 12px; font-size:15px; font-family:inherit; }
+    .settings-title { margin:0; font-size:18px; }
+    .settings-sub { margin:0; color:#7b8087; font-size:13px; line-height:1.5; }
+    .settings-field { display:grid; gap:4px; }
+    .settings-label { font-size:13px; font-weight:600; color:#3a3f45; }
+    .settings-input { height:36px; border:1px solid var(--line); border-radius:8px; padding:0 10px; font-size:14px; font-family:inherit; }
     .settings-input:focus { outline:2px solid #111; border-color:#111; }
-    .settings-error { color:#b3261e; font-size:13px; min-height:16px; }
-    .settings-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
-    .btn { padding:9px 16px; border-radius:10px; font-size:14px; font-weight:600; }
+    .settings-radio-row { display:flex; gap:14px; }
+    .settings-radio-label { display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; }
+    .settings-radio-label input[type="radio"] { accent-color:#111; }
+    .settings-error { color:#b3261e; font-size:12px; min-height:14px; }
+    .settings-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+    .btn { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; }
     .btn.ghost { background:#f0f0f1; } .btn.primary { background:#111; color:#fff; }
 
-    .tool-panel { overflow:hidden; display:flex; align-items:center; justify-content:center; padding:42px; }
-    .tool-list { width:min(530px, 100%); display:grid; gap:8px; }
-    .tool-card { height:58px; border-radius:10px; background:#f4f4f5; display:flex; align-items:center; gap:18px; padding:0 20px; font-size:20px; }
-    .shortcut { margin-left:auto; color:#777; background:#e8e8e9; border-radius:14px; padding:2px 9px; font-size:16px; }
+    /* Approvals modal ---------------------------------------------------------- */
+    .approval-overlay { position:fixed; inset:0; background:rgba(0,0,0,.42); display:grid; place-items:center; z-index:60; }
+    .approval-modal { width:min(480px, 92%); max-height:80vh; overflow:auto; background:#fff; border-radius:14px; padding:20px; box-shadow:0 20px 50px rgba(0,0,0,.24); display:grid; gap:12px; }
+    .approval-title { margin:0; font-size:16px; display:flex; align-items:center; gap:6px; }
+    .approval-reason { margin:0; color:#7b8087; font-size:13px; line-height:1.5; }
+    .approval-body { display:grid; gap:8px; }
+    .approval-meta { display:flex; align-items:center; gap:6px; font-size:12px; color:#6e737a; }
+    .approval-label { font-weight:600; }
+    .approval-code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; background:#f4f4f5; padding:2px 6px; border-radius:5px; word-break:break-all; }
+    .approval-cmd { margin:0; padding:10px 12px; background:#0f1115; color:#e6e6e6; border-radius:8px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-all; max-height:220px; overflow:auto; }
+    .approval-changes { display:grid; gap:4px; }
+    .approval-change-row { display:flex; align-items:center; gap:8px; font-size:13px; }
+    .approval-tag { font-size:11px; padding:1px 6px; border-radius:6px; background:#e8e8ea; }
+    .approval-tag.add, .approval-tag.added { background:#dff5e3; color:#1f6f3f; }
+    .approval-tag.delete, .approval-tag.removed { background:#fbe2e2; color:#a33; }
+    .approval-tag.modified, .approval-tag.update { background:#e6eefb; color:#2456b8; }
+    .approval-path { font-family:ui-monospace, Menlo, monospace; word-break:break-all; }
+    .approval-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; flex-wrap:wrap; }
+    .approval-decline { background:#fbe2e2; color:#a33; }
+    .approval-session { background:#e6eefb; color:#2456b8; }
+
+    .tool-panel { overflow:hidden; display:flex; align-items:center; justify-content:center; padding:28px; }
+    .tool-list { width:min(360px, 100%); display:grid; gap:6px; }
+    .tool-panel-card { height:42px; border-radius:8px; background:#f4f4f5; display:flex; align-items:center; gap:14px; padding:0 16px; font-size:14px; }
+    .shortcut { margin-left:auto; color:#777; background:#e8e8e9; border-radius:10px; padding:2px 7px; font-size:11px; }
     .terminal { border-top:1px solid var(--line); height:0; overflow:hidden; transition:height .22s ease; background:white; }
-    .terminal.open { height:360px; }
-    .terminal-tabs { height:54px; display:flex; align-items:center; padding:0 24px; gap:14px; }
-    .tab { display:flex; align-items:center; gap:10px; background:#f4f4f5; border-radius:12px; padding:10px 16px; font-size:18px; font-weight:700; }
-    .close { margin-left:auto; color:#858585; font-size:28px; }
-    #terminalOutput { height:calc(100% - 54px); padding:0 24px 18px; font:18px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; outline:0; overflow:auto; }
-    @media (max-width: 1160px) { .app { grid-template-columns:300px 1fr; } .stage-shell.tools-open { grid-template-columns:1fr 420px; } h1{font-size:32px} }
+    .terminal.open { height:300px; }
+    .terminal-tabs { height:40px; display:flex; align-items:center; padding:0 18px; gap:10px; }
+    .tab { display:flex; align-items:center; gap:8px; background:#f4f4f5; border-radius:10px; padding:7px 12px; font-size:13px; font-weight:700; }
+    .close { margin-left:auto; color:#858585; font-size:20px; }
+    #terminalMount { height:calc(100% - 40px); padding:0 4px 4px; }
+    #terminalMount .xterm { height:100%; padding:6px; }
+    @media (max-width: 1160px) { .app { grid-template-columns:240px 1fr; } .stage-shell.tools-open { grid-template-columns:1fr 340px; } h1{font-size:30px} .hero{gap:18px;} .meta{gap:12px; font-size:11px;} .stage-shell.conversation-active .stage{padding:12px 18px 18px;} }
   </style>
 </head>
 <body>
-  <div class="traffic"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+  <div class="traffic">
+    <button class="ghost-icon" id="sidebarToggle" title="折叠/展开侧边栏" aria-label="折叠/展开侧边栏">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg>
+    </button>
+    <button class="ghost-icon" id="searchButton" title="搜索" aria-label="搜索">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.2-3.2"/></svg>
+    </button>
+  </div>
   <div class="app">
     <aside class="sidebar">
-      <div class="side-actions">
-        <div class="nav-row clickable" id="newChatButton">✎ 新对话</div><div class="nav-row">⌕ 搜索</div><div class="nav-row">⌘ 插件</div><div class="nav-row">◴ 自动化</div>
+      <div class="seg" role="tablist" aria-label="模式">
+        <button class="seg-item active" data-tab="chat" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8 8 0 0 1-8.5 8 9 9 0 0 1-3.5-.7L3.5 20l1.3-4.7A8 8 0 1 1 20.5 11.5z"/></svg>对话</button>
+        <button class="seg-item" data-tab="cowork" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="6.5" height="16" rx="1.6"/><rect x="14" y="4" width="6.5" height="10" rx="1.6"/></svg>协作</button>
+        <button class="seg-item" data-tab="code" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 7.5L4 12l4.5 4.5"/><path d="M15.5 7.5L20 12l-4.5 4.5"/></svg>代码</button>
       </div>
-      <div class="section">项目</div>
+      <nav class="side-nav">
+        <div class="nav-row clickable" id="newChatButton"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span><span>新对话</span></div>
+        <div class="nav-row clickable" data-nav="projects"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.5l2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span>项目</span></div>
+        <div class="nav-row clickable" data-nav="artifacts"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l2.4 6.4 6.4 2.4-6.4 2.4L12 20.8l-2.4-6.4L3.2 12l6.4-2.4z"/></svg></span><span>制品</span></div>
+        <div class="nav-row clickable" data-nav="customize"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2.1"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="8" cy="17" r="2.1"/></svg></span><span>自定义</span></div>
+      </nav>
+      <div class="section">最近</div>
       <div class="project-list" id="projectList"></div>
-      <div class="nav-row settings clickable" id="settingsButton">⚙ 设置</div>
+      <div class="side-foot">
+        <div class="nav-row clickable" data-nav="design"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="9" cy="9.5" r="1.05" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1.05" fill="currentColor" stroke="none"/><circle cx="12" cy="14.5" r="1.05" fill="currentColor" stroke="none"/></svg></span><span>设计</span></div>
+        <div class="account-row clickable" id="settingsButton" title="设置">
+          <span class="avatar">设</span>
+          <span class="account-copy"><strong>设置</strong><span>账户 · 本地</span></span>
+          <span class="account-chevron">⌄</span>
+        </div>
+      </div>
     </aside>
     <main class="main">
       <header class="topbar">
-        <button class="pill" id="workspaceButton"><span class="cube">◈</span><span id="workspaceLabel">打开位置</span><span>⌄</span></button>
-        <button class="icon-button" id="terminalButton" title="打开终端">▭</button>
-        <button class="icon-button" id="toolsButton" title="打开右侧边栏">◧</button>
+        <button class="icon-button" id="terminalButton" title="打开终端" aria-label="打开终端">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M4.5 6l2 2-2 2"/><path d="M8.5 10h3"/></svg>
+        </button>
+        <button class="icon-button" id="toolsButton" title="打开右侧边栏" aria-label="打开右侧边栏">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10.5 2.5v11"/></svg>
+        </button>
+        <span class="brand-mark" aria-hidden="true">✳</span>
       </header>
       <section class="stage-shell" id="stageShell">
-        <div class="stage"><div class="hero"><h1>今天想用 Codex 构建点什么？</h1><div class="agent-status"><span id="agentState">正在检测 Codex…</span><span id="agentVersion"></span></div><div class="agent-console" id="agentOutput" tabindex="0"></div><div class="composer-wrap"><div class="composer"><textarea class="prompt-input" id="promptInput" placeholder="随心输入，回车发送给 Codex；Shift+Enter 换行"></textarea><div class="compose-row"><span>＋</span><span class="spacer"></span><button class="send" id="sendPrompt">↑</button></div></div><div class="meta"><span id="workspaceMeta">▱ 未选择目录⌄</span><span>▭ 本地模式⌄</span></div></div></div></div>
-        <aside class="tool-panel"><div class="tool-list"><div class="tool-card">▣ 审查 <span class="shortcut">⌃⇧G</span></div><div class="tool-card">▹ 终端</div><div class="tool-card">◎ 浏览器 <span class="shortcut">⌘T</span></div><div class="tool-card">▰ 文件 <span class="shortcut">⌘P</span></div></div></aside>
+        <div class="stage">
+          <div class="hero">
+            <div class="greeting-wrap">
+              <h1 id="greeting"><span class="spark">✳</span><span id="greetingText">下午好</span></h1>
+              <p class="greeting-sub">在 <span class="workspace-name" id="workspaceName">open_codex</span> 开始新的工作</p>
+            </div>
+            <div class="agent-status" id="agentStatus"><span id="agentState">正在检测 Codex…</span><span id="agentVersion"></span></div>
+            <div class="agent-console" id="agentOutput" tabindex="0"></div>
+            <div class="composer-wrap">
+              <div class="composer">
+                <textarea class="prompt-input" id="promptInput" placeholder="今天我能帮你做些什么？"></textarea>
+                <div class="compose-row">
+                  <button class="compose-action compose-plus" title="选择工作目录" aria-label="选择工作目录">＋</button>
+                  <button class="compose-action" id="approvalChip">✋ 请求批准 ⌄</button>
+                  <span class="spacer"></span>
+                  <button class="model-chip" id="modelChip" title="模型设置">5.5 <span class="muted">高 ⌄</span></button>
+                  <button class="send" id="sendPrompt" title="发送">↑</button>
+                </div>
+              </div>
+            </div>
+            <div class="suggestions" id="suggestions">
+              <button class="pill" data-prompt="帮我写一篇关于 的文章，先列出提纲。"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16z"/><path d="M14 6l3 3"/></svg>写作</button>
+              <button class="pill" data-prompt="用通俗易懂的方式给我讲解 这个概念。"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5L12 4l9 4.5-9 4.5z"/><path d="M7 11v4.5c0 1.2 2.5 2.5 5 2.5s5-1.3 5-2.5V11"/></svg>学习</button>
+              <button class="pill" data-prompt="帮我实现 ，先说明思路，再给出代码。"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 8L5 12l3.5 4"/><path d="M15.5 8L19 12l-3.5 4"/></svg>代码</button>
+              <button class="pill" data-prompt="给我一些关于 的实用建议。"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h11v3a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 11h2.5a1.5 1.5 0 0 1 0 4H16"/><path d="M8 4.5v2M11.5 4.5v2"/></svg>生活</button>
+              <button class="pill" data-prompt="我不确定从哪里开始，请根据当前项目给我一些建议。"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 17h5M10 20h4"/><path d="M12 3a6 6 0 0 1 3.5 10.8c-.6.5-1 1-1 1.7H9.5c0-.7-.4-1.2-1-1.7A6 6 0 0 1 12 3z"/></svg>帮我选</button>
+            </div>
+            <div class="meta">
+              <button class="meta-item clickable" id="workspaceButton"><span class="meta-icon">▣</span><strong id="workspaceLabel">open_codex</strong></button>
+              <span class="meta-item"><span class="meta-icon">▭</span><span>本地模式</span><span class="chevron">⌄</span></span>
+              <span class="meta-item"><span class="meta-icon">⌘</span><span id="branchLabel">feat/m0-engine-wiring</span><span class="chevron">⌄</span></span>
+            </div>
+          </div>
+        </div>
+        <aside class="tool-panel"><div class="tool-list"><div class="tool-panel-card">▣ 审查 <span class="shortcut">⌃⇧G</span></div><div class="tool-panel-card">▹ 终端</div><div class="tool-panel-card">◎ 浏览器 <span class="shortcut">⌘T</span></div><div class="tool-panel-card">▰ 文件 <span class="shortcut">⌘P</span></div></div></aside>
       </section>
-      <section class="terminal" id="terminal"><div class="terminal-tabs"><div class="tab">▹ 终端</div><button class="icon-button">＋</button><button class="close" id="closeTerminal">×</button></div><pre id="terminalOutput" tabindex="0"></pre></section>
+      <section class="terminal" id="terminal"><div class="terminal-tabs"><div class="tab">▹ 终端</div><button class="icon-button">＋</button><button class="close" id="closeTerminal">×</button></div><div id="terminalMount"></div></section>
     </main>
   </div>
+  <script src="../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="./renderer/ui/terminalPanel.js"></script>
   <script src="./renderer/ui/agentView.js"></script>
   <script src="./renderer/ui/settings.js"></script>
+  <script src="./renderer/ui/approvals.js"></script>
   <script src="./renderer/ui/sidebar.js"></script>
   <script>
     const api = window.openCodex;
-    const SESSION_ID = 'main';
+    // Unique session id per conversation — prevents item-id collisions
+    // between replayed history and new streamed items, and isolates the
+    // engine process so switching threads disposes the old one.
+    let SESSION_ID = _freshSessionId();
+    function _freshSessionId() {
+      return 'sess-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    }
 
     const shell = document.getElementById('stageShell');
     const terminal = document.getElementById('terminal');
-    const out = document.getElementById('terminalOutput');
     const agentOut = document.getElementById('agentOutput');
     const input = document.getElementById('promptInput');
+    const agentStatus = document.getElementById('agentStatus');
+    const sendButton = document.getElementById('sendPrompt');
 
-    let terminalId = null;
     let workspace = null;
     let sessionStarted = false;
+    let turnRunning = false;
+    let stopRequested = false;
+    let pendingResumeThreadId = null; // resume target, applied on the next send
+    let openThreadId = null; // the history thread currently shown, if any
 
     const settingsModal = window.SettingsModal.create(api);
-    const view = window.AgentView.create(agentOut, { onOpenSettings: openSettings });
-    const sidebar = window.Sidebar.create(document.getElementById('projectList'), api, { onOpenThread });
+    const approvalsModal = window.ApprovalsModal.create(api);
+    const view = window.AgentView.create(agentOut, {
+      onOpenSettings: openSettings,
+      onApprovalRequest: (approval) => approvalsModal.show(approval),
+    });
+    const sidebar = window.Sidebar.create(document.getElementById('projectList'), api, {
+      onOpenThread,
+      onThreadDeleted: (threadId) => {
+        // If the deleted thread is the one on screen, reset to a clean state.
+        if (threadId && threadId === openThreadId) {
+          openThreadId = null;
+          if (turnRunning) stopTurn();
+          view.clear();
+          setConversationActive(false);
+          setTurnRunning(false);
+          sessionStarted = false;
+          pendingResumeThreadId = null;
+        }
+      },
+    });
+    const termPanel = window.TerminalPanel
+      ? window.TerminalPanel.create(document.getElementById('terminalMount'), api)
+      : null;
+    let terminalOpen = false;
 
-    // Reopen a past conversation: load the project, replay saved messages, and
-    // resume the engine thread so the next prompt continues it.
+    function basename(value) {
+      return (value || '').split(/[\\/]/).pop() || value || 'open_codex';
+    }
+
+    function setWorkspaceDisplay(pathOrName) {
+      const name = basename(pathOrName);
+      document.getElementById('workspaceLabel').textContent = name;
+      document.getElementById('workspaceName').textContent = name;
+    }
+
+    function setConversationActive(on) {
+      shell.classList.toggle('conversation-active', Boolean(on));
+    }
+
+    function setTurnRunning(on, stopping = false) {
+      turnRunning = Boolean(on);
+      stopRequested = Boolean(stopping);
+      sendButton.classList.toggle('stop', turnRunning);
+      sendButton.classList.toggle('stopping', stopRequested);
+      sendButton.textContent = turnRunning ? '■' : '↑';
+      sendButton.title = turnRunning ? '停止生成' : '发送';
+      sendButton.disabled = stopRequested;
+      input.disabled = stopRequested;
+    }
+
+    // Open a past conversation: dispose the current session, create a fresh
+    // session id so new items don't collide with replayed history, then replay
+    // the messages.  The engine thread is resumed on the *next* send.
     async function onOpenThread(thread, project) {
+      // Dispose the old engine session so we don't leak Python processes.
+      if (sessionStarted) {
+        api.disposeEngine(SESSION_ID);
+        sessionStarted = false;
+      }
+      SESSION_ID = 'thread-' + thread.id;
       workspace = project.path;
-      document.getElementById('workspaceLabel').textContent = project.name || project.path;
-      document.getElementById('workspaceMeta').textContent = `▱ ${project.path}⌄`;
+      openThreadId = thread.id;
+      setWorkspaceDisplay(project.name || project.path);
       view.clear();
+      setConversationActive(false);
+      setTurnRunning(false);
       let messages = [];
       try {
         messages = await api.store.listMessages(thread.id);
       } catch (err) {
         messages = [];
       }
+      // Sort agent items within each turn so the display order matches
+      // the chronological order (reasoning → tools → answer).  Prefer the
+      // monotonic _seq emitted by bridge.py; fall back to item-id parsing
+      // for records written before _seq was added.
+      function _sortKey(itemData) {
+        if (itemData._seq != null) return itemData._seq;
+        // Fallback: parse the item id.  Formats:
+        //   reasoning-<sess>-<turn>[-<step>]  → base 0 + step*0.001
+        //   tool-<sess>-<turn>-<n>            → base 1 + n*0.001
+        //   msg-<sess>-<turn>                 → base 2
+        //   usage-…                            → base 3
+        const id = itemData.id || '';
+        if (id.startsWith('reasoning-')) {
+          const parts = id.split('-');
+          const step = parts.length >= 4 ? parseInt(parts[3], 10) || 0 : 0;
+          return step * 0.001;
+        }
+        if (id.startsWith('tool-')) {
+          const parts = id.split('-');
+          const n = parseInt(parts[parts.length - 1], 10) || 0;
+          return 1 + n * 0.001;
+        }
+        if (id.startsWith('msg-')) return 2;
+        return 3; // usage / unknown → end of turn
+      }
+      const sorted = [];
+      let batch = [];
       for (const msg of messages) {
+        if (msg.role === 'user') {
+          batch.sort((a, b) => _sortKey(a._data) - _sortKey(b._data));
+          for (const m of batch) sorted.push(m);
+          batch = [];
+          sorted.push(msg);
+        } else {
+          try { msg._data = JSON.parse(msg.data); } catch (_) { msg._data = {}; }
+          batch.push(msg);
+        }
+      }
+      batch.sort((a, b) => _sortKey(a._data) - _sortKey(b._data));
+      for (const m of batch) sorted.push(m);
+      // Render from the sorted list.
+      for (const msg of sorted) {
         let data;
         try {
           data = JSON.parse(msg.data);
@@ -175,17 +526,17 @@
         }
         if (msg.role === 'user') view.addUserMessage(data.text || '');
         else view.renderItem(data, 'completed');
+        setConversationActive(true);
       }
-      if (thread.engine_thread_id) {
-        const res = await api.startEngine(SESSION_ID, { cwd: project.path, resumeThreadId: thread.engine_thread_id });
-        sessionStarted = !(res && res.error);
-      } else {
-        sessionStarted = false;
-      }
+      // Don't start the engine just to view history — defer until the user
+      // actually sends, so opening a thread never spawns a turn or needs creds.
+      pendingResumeThreadId = thread.engine_thread_id || null;
+      sessionStarted = false;
     }
 
     function setState(text) {
       document.getElementById('agentState').textContent = text;
+      agentStatus.classList.toggle('visible', Boolean(text && text !== '就绪'));
     }
 
     function openSettings() {
@@ -211,8 +562,11 @@
 
     async function ensureSession() {
       if (sessionStarted) return true;
-      const res = await api.startEngine(SESSION_ID, { cwd: workspace || undefined });
+      const cfg = { cwd: workspace || undefined };
+      if (pendingResumeThreadId) cfg.resumeThreadId = pendingResumeThreadId;
+      const res = await api.startEngine(SESSION_ID, cfg);
       if (res && res.error) return false; // error already surfaced via engine:event
+      pendingResumeThreadId = null;
       sessionStarted = true;
       return true;
     }
@@ -220,16 +574,29 @@
     async function sendPrompt() {
       const text = input.value.trim();
       if (!text) return;
-      const cfg = await api.getConfig();
-      if (!cfg.baseUrl && !cfg.hasApiKey) {
-        openSettings();
-        return;
+      try {
+        const cfg = await api.getConfig();
+        if (!cfg.baseUrl && !cfg.hasApiKey) {
+          openSettings();
+          return;
+        }
+        view.addUserMessage(text);
+        setConversationActive(true);
+        input.value = '';
+        const ok = await ensureSession();
+        if (!ok) return;
+        api.sendPrompt(SESSION_ID, text);
+      } catch (err) {
+        view.renderError(`发送失败: ${err.message}`);
       }
-      view.addUserMessage(text);
-      input.value = '';
-      const ok = await ensureSession();
-      if (!ok) return;
-      api.sendPrompt(SESSION_ID, text);
+    }
+
+    function stopTurn() {
+      if (!turnRunning || stopRequested) return;
+      setTurnRunning(true, true);
+      setState('正在停止…');
+      api.interrupt(SESSION_ID);
+      sessionStarted = false;
     }
 
     document.getElementById('toolsButton').onclick = () => {
@@ -238,64 +605,193 @@
     };
     document.getElementById('settingsButton').onclick = openSettings;
     document.getElementById('newChatButton').onclick = () => {
+      if (turnRunning) stopTurn();
+      if (sessionStarted) {
+        api.disposeEngine(SESSION_ID);
+        sessionStarted = false;
+      }
+      SESSION_ID = _freshSessionId();
       view.clear();
-      sessionStarted = false;
+      setConversationActive(false);
+      setTurnRunning(false);
+      pendingResumeThreadId = null;
+      openThreadId = null;
     };
     document.getElementById('workspaceButton').onclick = async () => {
       const next = await api.chooseWorkspace();
       if (!next) return;
       workspace = next;
-      document.getElementById('workspaceLabel').textContent = next.split(/[\\/]/).pop() || next;
-      document.getElementById('workspaceMeta').textContent = `▱ ${next}⌄`;
+      setWorkspaceDisplay(next);
+      if (turnRunning) stopTurn();
       sessionStarted = false; // new workspace -> new session
+      pendingResumeThreadId = null;
+      openThreadId = null;
       view.clear();
+      setConversationActive(false);
+      setTurnRunning(false);
     };
 
-    document.getElementById('sendPrompt').onclick = sendPrompt;
+    sendButton.onclick = () => {
+      if (turnRunning) stopTurn();
+      else sendPrompt();
+    };
     input.addEventListener('keydown', (event) => {
+      // Ignore Enter during IME composition (e.g. Chinese / Japanese input):
+      // the Enter key confirms the candidate, it should NOT send the prompt.
+      if (event.isComposing) return;
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
-        sendPrompt();
+        if (!turnRunning) sendPrompt();
       }
     });
 
     api.onEngineEvent((event) => {
       if (event.sessionId && event.sessionId !== SESSION_ID) return;
       view.handleEvent(event);
+      if (event.kind === 'turn_started') {
+        setConversationActive(true);
+        setTurnRunning(true);
+      } else if (event.kind === 'turn_completed' || event.kind === 'turn_failed' || event.kind === 'turn_interrupted' || event.kind === 'error') {
+        setTurnRunning(false);
+        setState('就绪'); // clear any transient "正在停止…" once the turn ends
+      } else if (event.kind === 'item') {
+        setConversationActive(true);
+      }
       if (event.kind === 'thread_started' || event.kind === 'turn_completed') sidebar.refresh();
     });
 
     async function openTerminal() {
+      if (!termPanel) {
+        view.renderError('终端组件未加载，请运行 npm install 安装依赖。');
+        return;
+      }
       terminal.classList.add('open');
       document.getElementById('terminalButton').classList.add('active');
-      if (!terminalId) {
-        const term = await api.createTerminal(workspace || undefined);
-        terminalId = term.id;
+      if (!terminalOpen) {
+        try {
+          await termPanel.start(workspace || undefined);
+          terminalOpen = true;
+        } catch (err) {
+          terminal.classList.remove('open');
+          document.getElementById('terminalButton').classList.remove('active');
+          terminalOpen = false;
+          view.renderError(`终端启动失败: ${err.message}`);
+          return;
+        }
       }
-      out.focus();
+      termPanel.fit();
+      termPanel.focus();
     }
-    document.getElementById('terminalButton').onclick = openTerminal;
-    document.getElementById('closeTerminal').onclick = () => {
+    function closeTerminal() {
       terminal.classList.remove('open');
       document.getElementById('terminalButton').classList.remove('active');
+    }
+    // Toggle open/close on the same button, like the tools button to its right.
+    document.getElementById('terminalButton').onclick = () => {
+      if (terminal.classList.contains('open')) closeTerminal();
+      else openTerminal();
     };
-    api.onTerminalData(({ id, data }) => {
-      if (id !== terminalId) return;
-      out.textContent += data;
-      out.scrollTop = out.scrollHeight;
-    });
-    api.onTerminalExit(({ id, exitCode }) => {
-      if (id !== terminalId) return;
-      out.textContent += `\n[process exited with code ${exitCode}]\n`;
-      terminalId = null;
-    });
-    out.addEventListener('keydown', (event) => {
-      if (!terminalId) return;
-      if (event.key === 'Enter') api.writeTerminal(terminalId, '\r');
-      else if (event.key === 'Backspace') api.writeTerminal(terminalId, '');
-      else if (event.key.length === 1) api.writeTerminal(terminalId, event.key);
-      event.preventDefault();
-    });
+    document.getElementById('closeTerminal').onclick = closeTerminal;
+
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+      sidebarToggle.onclick = () => {
+        document.querySelector('.app').classList.toggle('sidebar-collapsed');
+      };
+    }
+
+    // --- Claude-style shell chrome: greeting, model chip, tabs, pills -------
+    (function initShellChrome() {
+      // Time-of-day greeting in the serif hero.
+      const hour = new Date().getHours();
+      const greet = hour < 5 ? '夜深了' : hour < 11 ? '早上好' : hour < 13 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
+      const greetEl = document.getElementById('greetingText');
+      if (greetEl) greetEl.textContent = greet;
+
+      // Reflect the configured model on the composer chip (best-effort).
+      api.getConfig().then((cfg) => {
+        const chip = document.getElementById('modelChip');
+        if (chip && cfg && cfg.model) {
+          chip.textContent = cfg.model + ' ';
+          const c = document.createElement('span');
+          c.className = 'muted';
+          c.textContent = '⌄';
+          chip.appendChild(c);
+        }
+      }).catch(() => {});
+
+      // Minimal toast so not-yet-wired nav items still acknowledge the click.
+      let toastTimer = null;
+      function toast(msg) {
+        let t = document.getElementById('shellToast');
+        if (!t) {
+          t = document.createElement('div');
+          t.id = 'shellToast';
+          t.className = 'toast';
+          document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+      }
+
+      // Segmented control routes to real surfaces (chat / tools panel / terminal).
+      const segItems = Array.from(document.querySelectorAll('.seg-item'));
+      const toolsBtn = document.getElementById('toolsButton');
+      segItems.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          segItems.forEach((b) => {
+            const on = b === btn;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+          const tab = btn.dataset.tab;
+          if (tab === 'chat') {
+            if (terminal.classList.contains('open')) closeTerminal();
+            if (shell.classList.contains('tools-open')) {
+              shell.classList.remove('tools-open');
+              if (toolsBtn) toolsBtn.classList.remove('active');
+            }
+          } else if (tab === 'cowork') {
+            if (!shell.classList.contains('tools-open')) {
+              shell.classList.add('tools-open');
+              if (toolsBtn) toolsBtn.classList.add('active');
+            }
+          } else if (tab === 'code') {
+            openTerminal();
+          }
+        });
+      });
+
+      // Suggestion pills pre-fill the composer; the user edits, then sends.
+      document.querySelectorAll('.pill').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          const starter = pill.dataset.prompt || '';
+          input.value = starter;
+          input.focus();
+          try { input.setSelectionRange(starter.length, starter.length); } catch (_) {}
+        });
+      });
+
+      // Secondary nav: '项目' opens a workspace; the rest aren't backed yet.
+      const workspaceBtn = document.getElementById('workspaceButton');
+      const projectsNav = document.querySelector('[data-nav="projects"]');
+      if (projectsNav && workspaceBtn) projectsNav.addEventListener('click', () => workspaceBtn.click());
+      document.querySelectorAll('[data-nav="artifacts"], [data-nav="customize"], [data-nav="design"]').forEach((n) => {
+        n.addEventListener('click', () => toast('该功能即将推出'));
+      });
+      const searchBtn = document.getElementById('searchButton');
+      if (searchBtn) searchBtn.addEventListener('click', () => toast('搜索即将推出'));
+
+      // Composer chrome: '+' chooses a workspace; chips open settings.
+      const plus = document.querySelector('.compose-plus');
+      if (plus && workspaceBtn) plus.addEventListener('click', () => workspaceBtn.click());
+      const modelChip = document.getElementById('modelChip');
+      if (modelChip) modelChip.addEventListener('click', openSettings);
+      const approvalChip = document.getElementById('approvalChip');
+      if (approvalChip) approvalChip.addEventListener('click', openSettings);
+    })();
 
     refreshStatus();
     sidebar.refresh();

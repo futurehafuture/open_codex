@@ -3,10 +3,8 @@
 /**
  * AgentView renders normalized engine events into a chat-style console.
  *
- * It is a classic browser script (no module loader) and attaches to
- * `window.AgentView`. Every node is built with createElement + textContent so
- * untrusted agent output (messages, command output, file paths) can never be
- * interpreted as HTML.
+ * Classic browser script (window.AgentView). Agent messages are rendered
+ * through marked (GitHub-flavoured Markdown) with raw HTML stripped for safety.
  */
 (function () {
   function el(tag, className, text) {
@@ -14,6 +12,63 @@
     if (className) node.className = className;
     if (text !== undefined && text !== null) node.textContent = text;
     return node;
+  }
+
+  // Configure marked for safe rendering (no raw HTML passthrough).
+  const md = window.marked || {};
+  if (md.setOptions) {
+    md.setOptions({ breaks: true, gfm: true });
+  } else {
+    md.parse = md.parse || (function (t) { return t; });
+  }
+
+  /** Render markdown text to safe HTML. */
+  function renderMarkdown(text) {
+    if (!text) return '';
+    // Strip raw HTML before passing to marked (defence in depth).
+    const safe = String(text).replace(/<[^>]*>/g, '');
+    try { return md.parse(safe); } catch (_) { return safe; }
+  }
+
+  /** Strip common markdown markers from plain-text display. */
+  function stripMarkdown(text) {
+    if (!text) return text;
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '$1')   // bold
+      .replace(/\*(.+?)\*/g, '$1')        // italic
+      .replace(/`(.+?)`/g, '$1')          // inline code
+      .replace(/^#{1,6}\s+/gm, '')        // headings
+      .replace(/^\s*[-*]\s+/gm, '')       // list bullets
+      .replace(/^\s*\d+\.\s+/gm, '')      // numbered lists
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1'); // links
+  }
+
+  /**
+   * Map a raw (often English) engine error to a friendly Chinese summary.
+   * Returns { title, needsSettings }. `needsSettings` drives the hint + button.
+   */
+  function friendlyError(message) {
+    const raw = String(message == null ? '' : message);
+    const lower = raw.toLowerCase();
+    if (
+      lower.includes('missing credentials') ||
+      lower.includes('api_key') || lower.includes('api key') ||
+      lower.includes('admin_key') ||
+      lower.includes('401') || lower.includes('unauthorized')
+    ) {
+      return { title: 'API 凭证缺失或无效，请检查 API Key', needsSettings: true };
+    }
+    if (
+      lower.includes('base url') || lower.includes('baseurl') ||
+      lower.includes('enotfound') || lower.includes('econnrefused') ||
+      lower.includes('fetch failed') || lower.includes('network')
+    ) {
+      return { title: '无法连接到服务端，请检查 Base URL', needsSettings: true };
+    }
+    if (lower.includes('429') || lower.includes('rate limit')) {
+      return { title: '请求过于频繁（限流），请稍后再试', needsSettings: false };
+    }
+    return { title: raw || '运行失败', needsSettings: false };
   }
 
   class AgentView {
@@ -66,6 +121,10 @@
         case 'turn_completed':
           this.setThinking(false);
           return;
+        case 'turn_interrupted':
+          this.setThinking(false);
+          this.renderNotice('已停止生成');
+          return;
         case 'turn_failed':
           this.setThinking(false);
           this.renderError(event.message || '运行失败');
@@ -106,13 +165,51 @@
       switch (item.type) {
         case 'agent_message':
           node.classList.add('msg', 'agent');
-          node.appendChild(el('div', 'bubble', item.text || ''));
+          // Skip empty bubbles (item created before any text streams, or a turn
+          // that failed mid-stream) so they don't render as floating gray ovals.
+          if (item.text) {
+            const bubble = el('div', 'bubble');
+            bubble.innerHTML = renderMarkdown(item.text);
+            node.appendChild(bubble);
+          }
           break;
         case 'reasoning': {
-          const d = el('details', 'reasoning');
-          d.appendChild(el('summary', null, '思考过程'));
-          d.appendChild(el('div', 'reason-body', item.text || ''));
-          node.appendChild(d);
+          const body = stripMarkdown(item.text || '');
+          const streaming = item.status === 'in_progress' || phase === 'updated';
+          if (!body && !streaming) break;
+
+          // Track start time on the item map entry so we can show duration
+          // once reasoning completes.
+          const entry = this.items.get(item.id);
+          if (entry && !entry._reasoningStarted && streaming) {
+            entry._reasoningStarted = Date.now();
+          }
+
+          const details = el('details', 'reasoning');
+          details.open = streaming;
+
+          const sum = el('summary', 'reasoning-summary');
+          const dot = el('span', streaming ? 'reasoning-dot live' : 'reasoning-dot');
+          sum.appendChild(dot);
+
+          if (streaming) {
+            sum.appendChild(el('span', 'reasoning-label', '思考中…'));
+          } else {
+            sum.appendChild(el('span', 'reasoning-label', '已思考'));
+            const dur = entry && entry._reasoningStarted
+              ? Math.max(1, Math.round((Date.now() - entry._reasoningStarted) / 1000))
+              : null;
+            const parts = [];
+            if (dur !== null) parts.push(`${dur}s`);
+            if (body) parts.push(`${body.length} 字`);
+            sum.appendChild(el('span', 'reasoning-meta', `· ${parts.join(' · ')}`));
+          }
+          details.appendChild(sum);
+
+          if (body) {
+            details.appendChild(el('div', 'reasoning-body', body));
+          }
+          node.appendChild(details);
           break;
         }
         case 'command_execution': {
@@ -144,53 +241,134 @@
           const list = el('ul', 'todo-list');
           (item.items || []).forEach((t) => {
             const li = el('li', t.completed ? 'done' : null);
-            li.appendChild(el('span', 'box', t.completed ? '☑' : '☐'));
+            li.appendChild(el('span', 'box', t.completed ? '' : ''));
             li.appendChild(el('span', 'todo-text', t.text || ''));
             list.appendChild(li);
           });
           node.appendChild(list);
           break;
         }
-        case 'web_search':
-          node.appendChild(el('div', 'search', `🔍 ${item.query || ''}`));
+        case 'web_search': {
+          const card = el('div', 'tool-call search');
+          card.appendChild(el('span', 'tool-call-icon', '🔍'));
+          card.appendChild(el('span', 'tool-call-name', item.query || '搜索中…'));
+          node.appendChild(card);
           break;
-        case 'mcp_tool_call':
-          node.appendChild(el('div', 'tool', `🔧 ${item.command || ''}`));
+        }
+        case 'mcp_tool_call': {
+          const running = item.status === 'in_progress';
+          const ok = item.status === 'completed';
+          const bad = item.status === 'failed' || item.status === 'declined';
+
+          const card = el('div', `tool-call ${running ? 'running' : ''} ${ok ? 'ok' : ''} ${bad ? 'bad' : ''}`);
+          // Spinner / check / cross
+          const ico = el('span', 'tool-call-icon');
+          if (running) ico.innerHTML = '<span class="tc-spin"></span>';
+          else if (ok) ico.textContent = '✓';
+          else ico.textContent = '✗';
+          card.appendChild(ico);
+
+          const name = el('span', 'tool-call-name', item.command || 'tool_call');
+          card.appendChild(name);
+
+          // Show first argument line when completed (truncated).
+          if (item.text && ok) {
+            const detail = el('span', 'tool-call-args', item.text.slice(0, 120));
+            card.appendChild(detail);
+          }
+          node.appendChild(card);
           break;
+        }
         case 'error':
           node.classList.add('error');
           node.appendChild(el('div', 'block-title', '错误'));
           node.appendChild(el('div', 'error-body', item.text || ''));
           break;
         default:
-          if (item.text) node.appendChild(el('div', 'bubble', item.text));
+          // Unknown item type — render a generic card so it never looks broken.
+          if (item.text) {
+            node.appendChild(el('div', 'bubble', stripMarkdown(item.text)));
+          } else if (item.type) {
+            const card = el('div', 'tool-call');
+            card.appendChild(el('span', 'tool-call-icon', '·'));
+            card.appendChild(el('span', 'tool-call-name', item.type));
+            node.appendChild(card);
+          }
       }
     }
 
     /** Prominent error block — the most common first-run failure is a bad URL/key. */
     renderError(message) {
+      const raw = String(message == null ? '运行失败' : message) || '运行失败';
+      // Collapse a repeated identical error into a single card with a ×N badge
+      // instead of stacking a wall of identical red boxes.
+      const last = this.container.lastElementChild;
+      if (last && last.dataset && last.dataset.errorRaw === raw) {
+        this.bumpErrorCount(last);
+        this.scroll();
+        return;
+      }
+      const info = friendlyError(raw);
       const node = el('div', 'block error');
+      node.dataset.errorRaw = raw;
       node.appendChild(el('div', 'block-title', '运行出错'));
-      node.appendChild(el('div', 'error-body', message));
-      node.appendChild(el('div', 'error-hint', '若是首次使用，请检查“设置”中的 Base URL 与 API Key 是否正确。'));
-      if (this.opts.onOpenSettings) {
-        const btn = el('button', 'error-btn', '打开设置');
-        btn.addEventListener('click', () => this.opts.onOpenSettings());
-        node.appendChild(btn);
+      node.appendChild(el('div', 'error-body', info.title));
+      // Keep the raw engine text available for debugging, but tucked away.
+      if (info.title !== raw) {
+        const d = el('details', 'error-detail');
+        d.appendChild(el('summary', null, '详情'));
+        d.appendChild(el('div', 'error-raw', raw));
+        node.appendChild(d);
+      }
+      if (info.needsSettings) {
+        node.appendChild(el('div', 'error-hint', '请在「设置」中检查 Base URL 与 API Key 是否正确。'));
+        if (this.opts.onOpenSettings) {
+          const btn = el('button', 'error-btn', '打开设置');
+          btn.addEventListener('click', () => this.opts.onOpenSettings());
+          node.appendChild(btn);
+        }
       }
       this.container.appendChild(node);
       this.scroll();
     }
 
-    /** SDK mode never emits approvals; minimal placeholder for app-server (M2). */
-    renderApproval(approval) {
-      if (!approval) return;
-      const node = el('div', 'block approval');
-      node.appendChild(el('div', 'block-title', '需要批准'));
-      if (approval.command) node.appendChild(el('pre', 'cmd-out', approval.command));
-      node.appendChild(el('div', 'error-hint', '交互式审批将在 app-server 模式（M2）支持。'));
+    /** Increment the repeat counter on an already-rendered error card. */
+    bumpErrorCount(node) {
+      const n = (Number(node.dataset.errorCount) || 1) + 1;
+      node.dataset.errorCount = String(n);
+      let badge = node.querySelector('.error-count');
+      if (!badge) {
+        badge = el('span', 'error-count');
+        const title = node.querySelector('.block-title');
+        if (title) title.appendChild(badge);
+      }
+      badge.textContent = ` ×${n}`;
+    }
+
+    renderNotice(message) {
+      const node = el('div', 'block notice', message);
       this.container.appendChild(node);
       this.scroll();
+    }
+
+    /**
+     * Forward approval requests to the external handler (ApprovalsModal).
+     * In SDK mode this is never called; in app-server mode it delegates to the
+     * interactive dialog wired by the renderer bootstrap.
+     */
+    renderApproval(approval) {
+      if (!approval) return;
+      if (this.opts.onApprovalRequest) {
+        this.opts.onApprovalRequest(approval);
+      } else {
+        // Fallback if no handler is wired (should not happen in normal flow).
+        const node = el('div', 'block approval');
+        node.appendChild(el('div', 'block-title', '需要批准'));
+        if (approval.command) node.appendChild(el('pre', 'cmd-out', approval.command));
+        node.appendChild(el('div', 'error-hint', '审批组件未加载。请确认 app-server 模式已正确配置。'));
+        this.container.appendChild(node);
+        this.scroll();
+      }
     }
   }
 
