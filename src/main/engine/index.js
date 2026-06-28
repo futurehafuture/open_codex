@@ -3,8 +3,9 @@
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { SdkAdapter } = require('./sdkAdapter');
-const { AppServerAdapter } = require('./appServerAdapter');
+const { SdkAdapter } = require('./adapters/sdkAdapter');
+const { AppServerAdapter } = require('./adapters/appServerAdapter');
+const { AgentmateAdapter } = require('./adapters/agentmateAdapter');
 const { EngineMode } = require('./types');
 const { createLogger } = require('../util/logger');
 
@@ -12,6 +13,7 @@ const log = createLogger('engine');
 
 /** adapter registry — keyed by EngineMode. */
 const ADAPTERS = {
+  [EngineMode.AGENTMATE]: AgentmateAdapter,
   [EngineMode.SDK]: SdkAdapter,
   [EngineMode.APP_SERVER]: AppServerAdapter,
 };
@@ -55,8 +57,8 @@ function checkAgent(codexPath) {
 function createEngine(mode, onEvent, opts) {
   const Adapter = ADAPTERS[mode];
   if (!Adapter) {
-    log.warn(`unknown engine mode "${mode}", falling back to sdk`);
-    return new SdkAdapter(onEvent, opts);
+    log.warn(`unknown engine mode "${mode}", falling back to agentmate`);
+    return new AgentmateAdapter(onEvent, opts);
   }
   log.info(`creating engine: ${mode}`);
   return new Adapter(onEvent, opts);

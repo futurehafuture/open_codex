@@ -72,13 +72,25 @@ function persistEvent(event) {
     if (event.kind === 'thread_started' && event.threadId && !m.engineThreadId) {
       store.setThreadEngineId(m.dbThreadId, event.threadId);
       m.engineThreadId = event.threadId;
-    } else if (event.kind === 'item' && event.phase === 'completed' && event.item) {
+    } else if (event.kind === 'item' && event.phase === 'completed' && event.item && isPersistableItem(event.item)) {
       store.appendItem(m.dbThreadId, event.item);
       store.touchThread(m.dbThreadId);
     }
   } catch (err) {
     log.warn(`persist event failed: ${err.message}`);
   }
+}
+
+/**
+ * Whether a completed item is worth persisting. Skips empty text-only items
+ * (usage placeholders, answers that streamed nothing) so replay stays clean.
+ */
+function isPersistableItem(item) {
+  if (!item) return false;
+  if (item.type === 'agent_message' || item.type === 'reasoning') {
+    return Boolean(item.text && String(item.text).trim());
+  }
+  return true;
 }
 
 /** Save a user prompt, creating the thread row lazily on first send. */
@@ -100,6 +112,23 @@ function persistUserMessage(sessionId, text) {
   } catch (err) {
     log.warn(`persist user message failed: ${err.message}`);
   }
+}
+
+/** Reconstruct basic turn history from stored messages for agent resume. */
+function buildHistory(messages) {
+  if (!messages || messages.length === 0) return [];
+  const history = [];
+  for (const msg of messages) {
+    try {
+      const data = JSON.parse(msg.data);
+      if (msg.role === 'user') {
+        history.push({ role: 'user', content: data.text || '' });
+      } else if (data.type === 'agent_message' && data.text && data.text.trim()) {
+        history.push({ role: 'assistant', content: data.text });
+      }
+    } catch (_) { /* skip unparseable */ }
+  }
+  return history;
 }
 
 function deriveTitle(text) {
@@ -184,9 +213,17 @@ ipcMain.handle('engine:start', async (_event, { sessionId, cfg = {} } = {}) => {
     cwd: cfg.cwd,
     resumeThreadId: cfg.resumeThreadId,
     model: cfg.model || settings.model,
+    apiKey: settings.apiKey,
+    baseUrl: settings.baseUrl,
     approvalPolicy: cfg.approvalPolicy || settings.approvalPolicy,
     sandboxMode: cfg.sandboxMode || settings.sandboxMode,
   });
+  // When resuming a thread, rebuild the conversation history from stored
+  // messages so the agent remembers previous turns.
+  if (cfg.resumeThreadId) {
+    const thread = store.getThreadByEngineId(cfg.resumeThreadId);
+    merged.history = thread ? buildHistory(store.listMessages(thread.id)) : [];
+  }
   registerSession(sessionId, cfg);
   try {
     return await getEngine().startSession(sessionId, merged);
@@ -230,6 +267,12 @@ ipcMain.on('engine:prompt', (_event, { sessionId, text }) => {
 
 ipcMain.on('engine:interrupt', (_event, { sessionId }) => {
   if (engine) engine.interrupt(sessionId);
+  forwardEngineEvent({ kind: 'turn_interrupted', sessionId });
+});
+
+ipcMain.on('engine:dispose', (_event, { sessionId }) => {
+  if (engine) engine.dispose(sessionId);
+  sessions.delete(sessionId);
 });
 
 ipcMain.on('engine:respond-approval', (_event, { requestId, decision }) => {
@@ -243,6 +286,7 @@ ipcMain.on('engine:respond-approval', (_event, { requestId, decision }) => {
 ipcMain.handle('store:listProjects', () => store.listProjects());
 ipcMain.handle('store:listThreads', (_event, projectId) => store.listThreads(projectId));
 ipcMain.handle('store:listMessages', (_event, threadId) => store.listMessages(threadId));
+ipcMain.handle('store:deleteThread', (_event, threadId) => store.deleteThread(threadId));
 
 /* ------------------------------------------------------------------ */
 /* Terminal (real shell panel — unchanged pty path)                  */
@@ -295,6 +339,7 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   killAll(terminals);
   resetEngine();
+  sessions.clear();
   store.close();
   if (!isMac) app.quit();
 });

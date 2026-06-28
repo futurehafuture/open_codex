@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agentmate</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23100e0b'/%3E%3Cpath d='M16 7l9 9-9 9-9-9z' fill='%23d99a4e'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ─── Design tokens ─── */
+:root {
+  --bg: #100e0b;
+  --bg-raised: #18140e;
+  --bg-sidebar: #13100c;
+  --ink: #ece4d6;
+  --ink-dim: #a59b89;
+  --ink-faint: #6d6555;
+  --ink-ghost: #4a4238;
+  --accent: #d99a4e;
+  --accent-ink: #1a140b;
+  --accent-soft: rgba(217,154,78,0.13);
+  --accent-glow: rgba(217,154,78,0.06);
+  --line: rgba(236,228,214,0.09);
+  --line-solid: #231e17;
+  --user-bg: #211a11;
+  --danger: #e0735c;
+  --trace-line: rgba(217,154,78,0.25);
+  --scroll-thumb: rgba(236,228,214,0.08);
+  --glow: rgba(217,154,78,0.08);
+  --noise-opacity: 0.03;
+  --serif: "Fraunces", Georgia, serif;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --sidebar-w: 260px;
+  --content-w: 760px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ─── Light theme ─── */
+:root[data-theme="light"] {
+  --bg: #faf6ee;
+  --bg-raised: #fffdf8;
+  --bg-sidebar: #f2ecdf;
+  --ink: #2b251c;
+  --ink-dim: #6b6253;
+  --ink-faint: #968b78;
+  --ink-ghost: #c0b6a3;
+  --accent: #bd7c2a;
+  --accent-ink: #fffdf8;
+  --accent-soft: rgba(189,124,42,0.12);
+  --accent-glow: rgba(189,124,42,0.05);
+  --line: rgba(43,37,28,0.12);
+  --line-solid: #e6ddcd;
+  --user-bg: #f0e6d3;
+  --danger: #c0492f;
+  --trace-line: rgba(189,124,42,0.35);
+  --scroll-thumb: rgba(43,37,28,0.16);
+  --glow: rgba(189,124,42,0.07);
+  --noise-opacity: 0.025;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  overflow: hidden;
+}
+
+/* warm radial glow */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 70% at 50% -10%, var(--glow), transparent 60%);
+}
+body::after {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── Sidebar ─── */
+.sidebar {
+  position: relative; z-index: 2;
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  height: 100%;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  transition: margin-left 0.3s var(--ease);
+}
+.sidebar.collapsed { margin-left: calc(var(--sidebar-w) * -1); }
+
+.sidebar-header {
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-brand {
+  font-family: var(--serif);
+  font-weight: 900; font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.sidebar-brand .dot { color: var(--accent); }
+
+.new-chat-btn {
+  background: var(--accent-soft);
+  border: 1px solid var(--trace-line);
+  color: var(--accent);
+  font-family: var(--mono); font-size: 12px;
+  padding: 6px 12px; border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.new-chat-btn:hover { background: rgba(217,154,78,0.22); transform: translateY(-1px); }
+
+.session-list {
+  flex: 1; overflow-y: auto; padding: 10px 0;
+}
+.session-list::-webkit-scrollbar { width: 6px; }
+.session-list::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 6px; }
+
+.session-group-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+  color: var(--ink-faint); text-transform: uppercase;
+  padding: 12px 16px 4px;
+}
+
+.session-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; cursor: pointer;
+  color: var(--ink-dim); font-size: 13.5px;
+  transition: background 0.15s, color 0.15s;
+  border-radius: 0;
+  position: relative;
+}
+.session-item:hover { background: var(--accent-soft); color: var(--ink); }
+.session-item.active { background: var(--accent-soft); color: var(--ink); }
+.session-item.active::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px;
+  background: var(--accent); border-radius: 1px;
+}
+.session-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-item .delete-btn {
+  opacity: 0; flex: none; width: 20px; height: 20px;
+  display: grid; place-items: center;
+  background: none; border: none; color: var(--ink-faint);
+  cursor: pointer; font-size: 14px; border-radius: 4px;
+  transition: opacity 0.15s, color 0.15s;
+}
+.session-item:hover .delete-btn { opacity: 1; }
+.session-item .delete-btn:hover { color: var(--danger); }
+
+/* ─── Main area ─── */
+.main {
+  flex: 1; position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; max-width: var(--content-w); margin: 0 auto;
+}
+.toggle-sidebar {
+  background: none; border: none; color: var(--ink-dim);
+  cursor: pointer; font-size: 18px; padding: 4px;
+  border-radius: 6px; transition: color 0.15s;
+  display: flex; align-items: center;
+}
+.toggle-sidebar:hover { color: var(--ink); }
+.topbar-title {
+  font-family: var(--serif); font-weight: 600; font-size: 15px;
+  color: var(--ink-dim); flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.topbar .badge {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+  color: var(--ink-faint); text-transform: uppercase; white-space: nowrap;
+}
+.topbar .badge b { color: var(--accent); font-weight: 500; }
+.theme-toggle {
+  background: none; border: 1px solid var(--line); color: var(--ink-dim);
+  cursor: pointer; font-size: 15px; padding: 4px; width: 30px; height: 30px;
+  border-radius: 8px; transition: color 0.15s, border-color 0.15s, background 0.15s;
+  display: grid; place-items: center; flex: none; line-height: 1;
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+
+/* ─── Message stream ─── */
+.stream {
+  flex: 1; overflow-y: auto;
+  padding: 24px 22px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
+  scroll-behavior: smooth;
+}
+.stream > .msg { width: 100%; max-width: var(--content-w); }
+.stream::-webkit-scrollbar { width: 8px; }
+.stream::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb); border-radius: 8px;
+  border: 2px solid var(--bg);
+}
+
+/* intro / empty state */
+.intro {
+  margin: auto 0; text-align: center;
+  animation: rise 0.9s var(--ease) 0.1s both;
+  max-width: 560px; align-self: center;
+}
+.intro h1 {
+  font-family: var(--serif); font-weight: 400; font-style: italic;
+  font-size: clamp(34px, 7vw, 56px); margin: 0 0 10px;
+  letter-spacing: -0.03em; line-height: 1.08;
+}
+.intro h1 em { font-style: normal; color: var(--accent); }
+.intro p { color: var(--ink-dim); margin: 0 0 26px; font-size: 15px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chip {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--ink-dim); background: var(--bg-raised);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 14px; cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, transform 0.2s;
+}
+.chip:hover { color: var(--ink); border-color: var(--accent); transform: translateY(-1px); }
+
+/* ─── Messages ─── */
+.msg { display: flex; animation: rise 0.4s var(--ease) both; }
+.msg.user { justify-content: flex-end; }
+.bubble {
+  background: var(--user-bg); border: 1px solid var(--line);
+  padding: 10px 15px; border-radius: 14px 14px 4px 14px;
+  max-width: 72%; color: var(--ink); font-size: 14.5px;
+}
+
+.msg.assistant { flex-direction: column; gap: 0; }
+.who {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em;
+  color: var(--ink-faint); text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+}
+.who .mark { color: var(--accent); font-size: 12px; }
+
+/* ─── Process trace (collapsible timeline) ─── */
+.trace-wrapper { margin-bottom: 4px; }
+
+.trace-summary {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--ink-faint);
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; padding: 4px 0;
+  user-select: none;
+  transition: color 0.15s;
+}
+.trace-summary:hover { color: var(--ink-dim); }
+.trace-summary .caret {
+  display: inline-block; font-size: 10px;
+  transition: transform 0.2s var(--ease);
+}
+.trace-wrapper.open .trace-summary .caret { transform: rotate(90deg); }
+
+.trace-timeline {
+  display: none;
+  padding: 6px 0 6px 14px;
+  border-left: 2px solid var(--trace-line);
+  margin: 4px 0 6px 5px;
+}
+.trace-wrapper.open .trace-timeline { display: block; }
+
+.trace-event {
+  padding: 3px 0;
+  animation: rise 0.3s var(--ease) both;
+}
+
+.trace-thinking {
+  font-style: italic; color: var(--ink-faint); font-size: 13px;
+  line-height: 1.5;
+  max-height: 120px; overflow-y: auto;
+}
+.trace-thinking::-webkit-scrollbar { width: 4px; }
+.trace-thinking::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 4px; }
+
+.trace-tool-call {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 3px 10px; border-radius: 6px;
+  margin: 2px 0;
+}
+.trace-tool-call .tool-icon { font-size: 11px; }
+
+.trace-tool-result {
+  font-family: var(--mono); font-size: 11.5px;
+  color: var(--ink-faint); padding: 2px 0 2px 16px;
+}
+.trace-result-toggle {
+  cursor: pointer; color: var(--ink-faint); font-size: 11px;
+  display: inline-flex; align-items: center; gap: 4px;
+  transition: color 0.15s;
+}
+.trace-result-toggle:hover { color: var(--ink-dim); }
+.trace-result-body {
+  display: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px; margin: 4px 0;
+  font-size: 11.5px; color: var(--ink-dim);
+  max-height: 200px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+.trace-result-body.open { display: block; }
+.trace-result-body::-webkit-scrollbar { width: 4px; }
+.trace-result-body::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 4px; }
+
+/* ─── Replayed transcript (saved session) ─── */
+.steps {
+  display: flex; flex-direction: column; gap: 0;
+  margin: 2px 0 12px; padding-left: 14px;
+  border-left: 2px solid var(--trace-line);
+}
+.step { display: flex; gap: 10px; padding: 5px 0; align-items: baseline; }
+.step-tag {
+  flex: none; width: 92px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em;
+  text-transform: uppercase; padding-top: 2px;
+  display: flex; align-items: center; gap: 4px;
+}
+.step-tag.think { color: var(--ink-faint); }
+.step-tag.tool { color: var(--accent); }
+.step-body { flex: 1; min-width: 0; font-size: 13px; line-height: 1.55; }
+.step-body.think { color: var(--ink-faint); font-style: italic; white-space: pre-wrap; }
+.step-args {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+  word-break: break-word;
+}
+.step-result-toggle {
+  cursor: pointer; color: var(--ink-faint); font-size: 11.5px;
+  font-family: var(--mono); display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 2px; transition: color 0.15s;
+}
+.step-result-toggle:hover { color: var(--ink-dim); }
+.step-result-body {
+  display: none; margin-top: 5px;
+  background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+  max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+.step-result-body.open { display: block; }
+.step-result-body::-webkit-scrollbar { width: 4px; }
+.step-result-body::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 4px; }
+
+/* ─── Answer ─── */
+.answer {
+  border-left: 2px solid var(--accent); padding-left: 14px;
+  color: var(--ink); font-size: 14.5px; line-height: 1.65;
+}
+.answer code {
+  font-family: var(--mono); font-size: 0.87em;
+  background: var(--accent-soft); padding: 1px 5px; border-radius: 4px;
+}
+.answer pre {
+  background: var(--bg-raised); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px 14px; margin: 8px 0;
+  overflow-x: auto; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.5;
+}
+.answer pre code { background: none; padding: 0; }
+.answer a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.answer.error { border-color: var(--danger); color: var(--danger); }
+.answer p { margin: 0 0 10px; }
+.answer p:last-child { margin-bottom: 0; }
+.answer h1, .answer h2, .answer h3, .answer h4, .answer h5, .answer h6 {
+  font-family: var(--serif); font-weight: 600; line-height: 1.25;
+  margin: 16px 0 8px; letter-spacing: -0.01em;
+}
+.answer h1 { font-size: 1.5em; }
+.answer h2 { font-size: 1.3em; }
+.answer h3 { font-size: 1.13em; }
+.answer h4, .answer h5, .answer h6 { font-size: 1em; color: var(--ink-dim); }
+.answer > :first-child { margin-top: 0; }
+.answer ul, .answer ol { margin: 6px 0 12px; padding-left: 1.4em; }
+.answer li { margin: 3px 0; }
+.answer li::marker { color: var(--accent); }
+.answer blockquote {
+  margin: 8px 0; padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--trace-line); color: var(--ink-dim); font-style: italic;
+}
+.answer hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
+.answer strong { font-weight: 600; color: var(--ink); }
+
+/* streaming cursor */
+.answer .cursor {
+  display: inline-block; width: 2px; height: 1em;
+  background: var(--accent); margin-left: 2px;
+  animation: blink 0.8s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+/* thinking indicator */
+.thinking-indicator {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+}
+.pulse {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 1.4s ease-in-out infinite;
+}
+.elapsed { font-size: 11px; color: var(--ink-ghost); }
+
+/* ─── Composer ─── */
+.composer { padding: 12px 22px 18px; width: 100%; max-width: calc(var(--content-w) + 44px); margin: 0 auto; }
+.field {
+  display: flex; align-items: flex-end; gap: 8px;
+  background: var(--bg-raised); border: 1px solid var(--line);
+  border-radius: 14px; padding: 8px 8px 8px 16px;
+  transition: border-color 0.2s;
+}
+.field:focus-within { border-color: var(--accent); }
+textarea {
+  flex: 1; resize: none; border: none; outline: none; background: none;
+  color: var(--ink); font-family: var(--sans); font-size: 14.5px;
+  line-height: 1.5; max-height: 160px; padding: 5px 0;
+}
+textarea::placeholder { color: var(--ink-faint); }
+.send {
+  flex: none; width: 36px; height: 36px; border-radius: 10px;
+  border: none; cursor: pointer; background: var(--accent); color: var(--accent-ink);
+  font-size: 16px; display: grid; place-items: center;
+  transition: transform 0.15s, opacity 0.2s;
+}
+.send:hover:not(:disabled) { transform: translateY(-1px); }
+.send:disabled { opacity: 0.35; cursor: not-allowed; }
+.send.stop { background: var(--danger); font-size: 13px; }
+.hint {
+  font-family: var(--mono); font-size: 10px; color: var(--ink-ghost);
+  text-align: center; margin-top: 8px; letter-spacing: 0.03em;
+}
+
+/* ─── Animations ─── */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes breathe { 0%,100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .sidebar { position: fixed; left: 0; top: 0; height: 100%; z-index: 100; box-shadow: 8px 0 32px rgba(0,0,0,0.5); }
+  .sidebar.collapsed { margin-left: 0; transform: translateX(-100%); }
+  .sidebar:not(.collapsed) + .main::before {
+    content: ""; position: fixed; inset: 0; z-index: 99;
+    background: rgba(0,0,0,0.5); cursor: pointer;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<aside class="sidebar collapsed" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-brand">agentmate<span class="dot">.</span></div>
+    <button class="new-chat-btn" id="newChatBtn">+ New</button>
+  </div>
+  <div class="session-list" id="sessionList"></div>
+</aside>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <button class="toggle-sidebar" id="toggleSidebar" title="Toggle sidebar">☰</button>
+      <div class="topbar-title" id="topbarTitle">New conversation</div>
+      <div class="badge">ReAct loop · <b>streaming</b> · web search</div>
+      <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
+    </div>
+  </div>
+
+  <div class="stream" id="stream">
+    <div class="intro" id="intro">
+      <h1>think, search, <em>answer</em>.</h1>
+      <p>An agent that reasons step by step, searches the live web, and streams every thought.</p>
+      <div class="chips" id="chips">
+        <div class="chip">What are today's notable AI news?</div>
+        <div class="chip">Who won the most recent F1 race?</div>
+        <div class="chip">Summarize the latest on fusion energy.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div class="field">
+      <textarea id="input" rows="1" placeholder="Ask anything — it'll search if it needs to…"></textarea>
+      <button class="send" id="send" title="Send">↑</button>
+    </div>
+    <div class="hint">enter to send · shift+enter for newline</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (s, p) => (p || document).querySelector(s);
+  const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
+
+  const stream = $("#stream");
+  const intro = $("#intro");
+  const input = $("#input");
+  const sendBtn = $("#send");
+  const sidebar = $("#sidebar");
+  const sessionList = $("#sessionList");
+  const topbarTitle = $("#topbarTitle");
+
+  let sessionId = null;
+  let pending = false;
+  let abortController = null;
+
+  /* ─── Theme toggle ─── */
+  const themeToggle = $("#themeToggle");
+  function applyTheme(theme) {
+    if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+    else document.documentElement.removeAttribute("data-theme");
+    themeToggle.textContent = theme === "light" ? "☀" : "☾";
+  }
+  applyTheme(localStorage.getItem("agentmate-theme") || "dark");
+  themeToggle.onclick = () => {
+    const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    localStorage.setItem("agentmate-theme", next);
+    applyTheme(next);
+  };
+
+  /* ─── Sidebar toggle ─── */
+  $("#toggleSidebar").onclick = () => sidebar.classList.toggle("collapsed");
+  $("#newChatBtn").onclick = () => { sessionId = null; clearStream(); topbarTitle.textContent = "New conversation"; loadSessions(); };
+
+  function clearStream() {
+    stream.innerHTML = "";
+    const d = document.createElement("div");
+    d.className = "intro"; d.id = "intro";
+    d.innerHTML = '<h1>think, search, <em>answer</em>.</h1>' +
+      '<p>An agent that reasons step by step, searches the live web, and streams every thought.</p>' +
+      '<div class="chips" id="chips">' +
+        '<div class="chip">What are today\'s notable AI news?</div>' +
+        '<div class="chip">Who won the most recent F1 race?</div>' +
+        '<div class="chip">Summarize the latest on fusion energy.</div>' +
+      '</div>';
+    stream.appendChild(d);
+    d.querySelector(".chips").addEventListener("click", chipHandler);
+  }
+
+  /* ─── Session list ─── */
+  async function loadSessions() {
+    try {
+      const res = await fetch("/api/sessions");
+      const list = await res.json();
+      renderSessionList(list);
+    } catch { /* offline or first use */ }
+  }
+
+  function renderSessionList(list) {
+    sessionList.innerHTML = "";
+    if (!list.length) {
+      sessionList.innerHTML = '<div style="padding:20px 16px;color:var(--ink-ghost);font-size:13px;">No conversations yet</div>';
+      return;
+    }
+    const now = Date.now() / 1000;
+    const groups = { today: [], week: [], older: [] };
+    for (const s of list) {
+      const age = now - (s.updated_at || 0);
+      if (age < 86400) groups.today.push(s);
+      else if (age < 604800) groups.week.push(s);
+      else groups.older.push(s);
+    }
+    const labels = { today: "Today", week: "This week", older: "Older" };
+    for (const [key, items] of Object.entries(groups)) {
+      if (!items.length) continue;
+      const label = document.createElement("div");
+      label.className = "session-group-label";
+      label.textContent = labels[key];
+      sessionList.appendChild(label);
+      for (const s of items) {
+        const el = document.createElement("div");
+        el.className = "session-item" + (s.session_id === sessionId ? " active" : "");
+        el.innerHTML = '<span class="title"></span><button class="delete-btn" title="Delete">×</button>';
+        el.querySelector(".title").textContent = s.title || "Untitled";
+        el.querySelector(".title").onclick = () => loadSession(s.session_id);
+        el.querySelector(".delete-btn").onclick = (e) => { e.stopPropagation(); deleteSession(s.session_id); };
+        sessionList.appendChild(el);
+      }
+    }
+  }
+
+  async function loadSession(id) {
+    try {
+      const res = await fetch("/api/sessions/" + id);
+      if (!res.ok) return;
+      const data = await res.json();
+      sessionId = data.session_id;
+      topbarTitle.textContent = data.title || "Conversation";
+      replaySession(data);
+      loadSessions();
+    } catch {}
+  }
+
+  async function deleteSession(id) {
+    try {
+      await fetch("/api/sessions/" + id, { method: "DELETE" });
+      if (id === sessionId) { sessionId = null; clearStream(); topbarTitle.textContent = "New conversation"; }
+      loadSessions();
+    } catch {}
+  }
+
+  /* Rebuild a saved conversation from the raw OpenAI message list — the
+     first-hand SDK record. Roles map directly to the transcript:
+       user                      → a question bubble
+       assistant + tool_calls    → tool steps (+ any preamble content as a note)
+       tool                      → the result for its matching tool_call
+       assistant (no tool_calls) → the final answer for that turn
+     The system prompt is skipped. */
+  function replaySession(data) {
+    stream.innerHTML = "";
+    const messages = (data.messages || []).filter(m => m.role !== "system");
+    let steps = null;   // steps accumulated for the in-progress assistant turn
+
+    for (const m of messages) {
+      if (m.role === "user") {
+        addUser(m.content || "");
+        steps = [];
+      } else if (m.role === "assistant") {
+        steps = steps || [];
+        if (m.tool_calls && m.tool_calls.length) {
+          if ((m.content || "").trim()) steps.push({ type: "thinking", text: m.content });
+          for (const tc of m.tool_calls) {
+            steps.push({
+              type: "tool",
+              call_id: tc.id,
+              name: tc.function ? tc.function.name : tc.name,
+              arguments: tc.function ? tc.function.arguments : tc.arguments,
+              result: null,
+            });
+          }
+        } else {
+          addAssistantReplay(steps, m.content || "");
+          steps = null;
+        }
+      } else if (m.role === "tool" && steps) {
+        for (let k = steps.length - 1; k >= 0; k--) {
+          if (steps[k].type === "tool" && steps[k].call_id === m.tool_call_id) {
+            steps[k].result = m.content;
+            break;
+          }
+        }
+      }
+    }
+    if (steps && steps.length) addAssistantReplay(steps, "");
+    scroll();
+  }
+
+  /* ─── Rendering helpers ─── */
+  function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  /* Inline span formatting (run on already-escaped text). */
+  function inlineMd(s) {
+    return s
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/(^|[^"=>])(https?:\/\/[^\s<)]+)/g,
+        '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  }
+
+  /* Block-level markdown → HTML. Renders identically while streaming and at the
+     end, so the live answer never disagrees with the final render. */
+  function renderMd(src) {
+    const rows = esc((src || "").replace(/\r\n/g, "\n")).split("\n");
+    const out = [];
+    let list = null;          // "ul" | "ol" | null
+    let para = [];
+    let code = null;          // array of raw lines while inside a fence, else null
+    const flushPara = () => { if (para.length) { out.push("<p>" + inlineMd(para.join("<br>")) + "</p>"); para = []; } };
+    const closeList = () => { if (list) { out.push("</" + list + ">"); list = null; } };
+    const closeCode = () => { if (code !== null) { out.push("<pre><code>" + code.join("\n") + "</code></pre>"); code = null; } };
+
+    for (const line of rows) {
+      const fence = line.match(/^\s*```(\w*)\s*$/);
+      if (code !== null) {            // inside a fenced block
+        if (fence) closeCode();       // closing fence
+        else code.push(line);
+        continue;
+      }
+      if (fence) { flushPara(); closeList(); code = []; continue; }  // opening fence
+      if (!line.trim()) { flushPara(); closeList(); continue; }
+      let m;
+      if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+        flushPara(); closeList();
+        const lv = m[1].length; out.push("<h" + lv + ">" + inlineMd(m[2]) + "</h" + lv + ">"); continue;
+      }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flushPara(); closeList(); out.push("<hr>"); continue; }
+      if ((m = line.match(/^\s*&gt;\s?(.*)$/))) { flushPara(); closeList(); out.push("<blockquote>" + inlineMd(m[1]) + "</blockquote>"); continue; }
+      if ((m = line.match(/^\s*[-*+]\s+(.*)$/))) {
+        flushPara(); if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; }
+        out.push("<li>" + inlineMd(m[1]) + "</li>"); continue;
+      }
+      if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
+        flushPara(); if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; }
+        out.push("<li>" + inlineMd(m[1]) + "</li>"); continue;
+      }
+      para.push(line.trim());
+    }
+    closeCode(); flushPara(); closeList();
+    return out.join("\n");
+  }
+
+  /* Sticky auto-scroll: only follow new output while the user is at the
+     bottom. Once they scroll up to read, stop yanking them back down. */
+  let stickToBottom = true;
+  stream.addEventListener("scroll", () => {
+    stickToBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
+  });
+  function scroll() { if (stickToBottom) stream.scrollTop = stream.scrollHeight; }
+
+  function addUser(text) {
+    const el = $("#intro");
+    if (el) el.remove();
+    stickToBottom = true;
+    const d = document.createElement("div");
+    d.className = "msg user";
+    d.innerHTML = '<div class="bubble"></div>';
+    d.querySelector(".bubble").textContent = text;
+    stream.appendChild(d);
+    scroll();
+  }
+
+  /* One assistant turn as an ordered, labeled transcript built from steps:
+     each step is { type: "thinking", text } or
+     { type: "tool", name, arguments, result }. */
+  function addAssistantReplay(steps, answer) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg assistant";
+    wrap.innerHTML = '<div class="who"><span class="mark">◆</span> agentmate</div>';
+
+    const stepsEl = document.createElement("div");
+    stepsEl.className = "steps";
+    for (const s of steps) {
+      if (s.type === "thinking") {
+        if ((s.text || "").trim()) stepsEl.appendChild(stepThought(s.text));
+      } else if (s.type === "tool") {
+        stepsEl.appendChild(stepTool(s));
+      }
+    }
+    if (stepsEl.children.length) wrap.appendChild(stepsEl);
+
+    const ansDiv = document.createElement("div");
+    ansDiv.className = "answer";
+    ansDiv.innerHTML = renderMd(answer || "");
+    wrap.appendChild(ansDiv);
+    stream.appendChild(wrap);
+  }
+
+  function stepThought(text) {
+    const d = document.createElement("div");
+    d.className = "step";
+    d.innerHTML = '<div class="step-tag think">◇ thought</div><div class="step-body think"></div>';
+    d.querySelector(".step-body").textContent = text.trim();
+    return d;
+  }
+
+  function stepTool(step) {
+    const d = document.createElement("div");
+    d.className = "step";
+    d.innerHTML =
+      '<div class="step-tag tool">⚡ tool</div>' +
+      '<div class="step-body"><div class="step-args"></div></div>';
+    let args = step.arguments || "";
+    try { args = JSON.stringify(JSON.parse(args)); } catch {}
+    d.querySelector(".step-args").textContent = (step.name || "tool") + "(" + args + ")";
+    if (step.result != null) {
+      const body = d.querySelector(".step-body");
+      const full = step.result || "";
+      const toggle = document.createElement("div");
+      toggle.className = "step-result-toggle";
+      toggle.textContent = "↳ " + full.slice(0, 90).replace(/\s+/g, " ") + (full.length > 90 ? "…" : "");
+      const rb = document.createElement("div");
+      rb.className = "step-result-body";
+      rb.textContent = full;
+      toggle.onclick = () => rb.classList.toggle("open");
+      body.appendChild(toggle);
+      body.appendChild(rb);
+    }
+    return d;
+  }
+
+  function appendToolCall(container, evt) {
+    const d = document.createElement("div");
+    d.className = "trace-event";
+    d.innerHTML = '<span class="trace-tool-call"><span class="tool-icon">⚡</span> ' + esc(evt.name || "tool") + '</span>';
+    container.appendChild(d);
+  }
+
+  function appendToolResult(container, evt) {
+    const d = document.createElement("div");
+    d.className = "trace-event trace-tool-result";
+    const preview = (evt.result || "").slice(0, 80);
+    d.innerHTML = '<div class="trace-result-toggle">↳ ' + esc(preview) + (evt.result && evt.result.length > 80 ? "…" : "") + '</div>' +
+      '<div class="trace-result-body"></div>';
+    d.querySelector(".trace-result-body").textContent = evt.result || "";
+    d.querySelector(".trace-result-toggle").onclick = () => d.querySelector(".trace-result-body").classList.toggle("open");
+    container.appendChild(d);
+  }
+
+  /* ─── Streaming ask ─── */
+  function setSending(on) {
+    pending = on;
+    if (on) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "■";
+      sendBtn.title = "Stop";
+      sendBtn.classList.add("stop");
+    } else {
+      sendBtn.textContent = "↑";
+      sendBtn.title = "Send";
+      sendBtn.classList.remove("stop");
+      abortController = null;
+    }
+  }
+
+  async function ask(text) {
+    if (pending || !text.trim()) return;
+    abortController = new AbortController();
+    setSending(true);
+    addUser(text);
+    input.value = ""; input.style.height = "auto";
+
+    // Build assistant container
+    const wrap = document.createElement("div");
+    wrap.className = "msg assistant";
+    wrap.innerHTML = '<div class="who"><span class="mark">◆</span> agentmate</div>';
+
+    // Trace (starts open during streaming)
+    const traceWrap = document.createElement("div");
+    traceWrap.className = "trace-wrapper open";
+    traceWrap.innerHTML = '<div class="trace-summary"><span class="caret">▸</span> <span class="trace-status"></span></div>';
+    const timeline = document.createElement("div");
+    timeline.className = "trace-timeline";
+    traceWrap.appendChild(timeline);
+    traceWrap.querySelector(".trace-summary").onclick = () => traceWrap.classList.toggle("open");
+    wrap.appendChild(traceWrap);
+
+    // Thinking indicator
+    const thinkingInd = document.createElement("div");
+    thinkingInd.className = "thinking-indicator";
+    thinkingInd.innerHTML = '<span class="pulse"></span> thinking<span class="elapsed">0s</span>';
+    timeline.appendChild(thinkingInd);
+
+    // Answer area
+    const ansDiv = document.createElement("div");
+    ansDiv.className = "answer";
+    ansDiv.style.display = "none";
+    wrap.appendChild(ansDiv);
+
+    stream.appendChild(wrap);
+    scroll();
+
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const el = thinkingInd.querySelector(".elapsed");
+      if (el) el.textContent = Math.round((Date.now() - started) / 1000) + "s";
+    }, 1000);
+
+    // SSE state
+    let thinkingEl = null;
+    let toolCount = 0;
+    let hasThinking = false;
+    let answerStarted = false;
+    let answerRaw = "";
+
+    function updateStatus() {
+      const st = traceWrap.querySelector(".trace-status");
+      let t = "◇ ";
+      if (hasThinking) t += "Reasoning";
+      if (toolCount) t += (hasThinking ? ", s" : "S") + "earched " + toolCount + " time" + (toolCount > 1 ? "s" : "");
+      if (!hasThinking && !toolCount) t += "Processing…";
+      const elapsed = Math.round((Date.now() - started) / 1000);
+      st.textContent = t + " · " + elapsed + "s";
+    }
+    const statusTimer = setInterval(updateStatus, 1000);
+    updateStatus();
+
+    try {
+      const res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId }),
+        signal: abortController.signal,
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err || "HTTP " + res.status);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ") && currentEvent) {
+            const raw = line.slice(6);
+            let data;
+            try { data = JSON.parse(raw); } catch { continue; }
+
+            if (currentEvent === "session") {
+              sessionId = data.session_id;
+            } else if (currentEvent === "thinking") {
+              hasThinking = true;
+              if (!thinkingEl) {
+                thinkingEl = document.createElement("div");
+                thinkingEl.className = "trace-event";
+                thinkingEl.innerHTML = '<div class="trace-thinking"></div>';
+                timeline.appendChild(thinkingEl);
+              }
+              const tk = thinkingEl.querySelector(".trace-thinking");
+              tk.textContent += data.delta || "";
+              tk.scrollTop = tk.scrollHeight;
+              updateStatus();
+              scroll();
+            } else if (currentEvent === "tool_call") {
+              toolCount++;
+              thinkingEl = null; // new thinking block after tool
+              clearInterval(timer);
+              thinkingInd.remove();
+              appendToolCall(timeline, data);
+              // Add a small "running tool" indicator
+              const runInd = document.createElement("div");
+              runInd.className = "thinking-indicator tool-running";
+              runInd.innerHTML = '<span class="pulse"></span> running ' + esc(data.name || "tool") + '…';
+              timeline.appendChild(runInd);
+              updateStatus();
+              scroll();
+            } else if (currentEvent === "tool_result") {
+              const runInd = timeline.querySelector(".tool-running");
+              if (runInd) runInd.remove();
+              appendToolResult(timeline, data);
+              scroll();
+            } else if (currentEvent === "answer") {
+              if (!answerStarted) {
+                answerStarted = true;
+                clearInterval(timer);
+                thinkingInd.remove();
+                ansDiv.style.display = "";
+                // Collapse trace when answer starts
+                traceWrap.classList.remove("open");
+                updateStatus();
+              }
+              // Render markdown on every delta so streaming matches the final render.
+              answerRaw += data.delta || "";
+              ansDiv.innerHTML = renderMd(answerRaw) + '<span class="cursor"></span>';
+              scroll();
+            } else if (currentEvent === "done") {
+              sessionId = data.session_id || sessionId;
+              if (!topbarTitle.textContent || topbarTitle.textContent === "New conversation") {
+                topbarTitle.textContent = text.slice(0, 50);
+              }
+              // Final render (drops the streaming cursor).
+              ansDiv.innerHTML = renderMd(data.answer || answerRaw);
+              ansDiv.style.display = "";
+              loadSessions();
+            } else if (currentEvent === "error") {
+              clearInterval(timer); clearInterval(statusTimer);
+              thinkingInd.remove();
+              ansDiv.style.display = "";
+              ansDiv.className = "answer error";
+              ansDiv.textContent = "Error: " + (data.error || "unknown");
+              scroll();
+            }
+
+            currentEvent = "";
+          }
+        }
+      }
+    } catch (err) {
+      clearInterval(timer); clearInterval(statusTimer);
+      thinkingInd.remove();
+      const runInd = timeline.querySelector(".tool-running");
+      if (runInd) runInd.remove();
+      if (err.name === "AbortError") {
+        // User stopped the response — keep whatever streamed so far.
+        const cursor = ansDiv.querySelector(".cursor");
+        if (cursor) cursor.remove();
+        if (!answerStarted) { ansDiv.style.display = ""; ansDiv.className = "answer"; }
+        const note = document.createElement("div");
+        note.className = "hint"; note.style.textAlign = "left"; note.style.marginTop = "6px";
+        note.textContent = "⊘ stopped";
+        wrap.appendChild(note);
+        loadSessions();
+      } else {
+        ansDiv.style.display = "";
+        ansDiv.className = "answer error";
+        ansDiv.textContent = "Network error: " + err.message;
+      }
+    } finally {
+      clearInterval(timer); clearInterval(statusTimer);
+      setSending(false); input.focus();
+      scroll();
+    }
+  }
+
+  /* ─── Input handling ─── */
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); }
+  });
+  sendBtn.addEventListener("click", () => {
+    if (pending) { if (abortController) abortController.abort(); }
+    else ask(input.value);
+  });
+
+  function chipHandler(e) {
+    if (e.target.classList.contains("chip")) ask(e.target.textContent);
+  }
+  const chips = $("#chips");
+  if (chips) chips.addEventListener("click", chipHandler);
+
+  /* ─── Mobile overlay click closes sidebar ─── */
+  document.addEventListener("click", (e) => {
+    if (window.innerWidth <= 900 && !sidebar.classList.contains("collapsed") &&
+        !sidebar.contains(e.target) && e.target.id !== "toggleSidebar") {
+      sidebar.classList.add("collapsed");
+    }
+  });
+
+  /* ─── Init ─── */
+  loadSessions();
+  input.focus();
+})();
+</script>
+</body>
+</html>

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('openCodex', {
   startEngine: (sessionId, cfg) => ipcRenderer.invoke('engine:start', { sessionId, cfg }),
   sendPrompt: (sessionId, text) => ipcRenderer.send('engine:prompt', { sessionId, text }),
   interrupt: (sessionId) => ipcRenderer.send('engine:interrupt', { sessionId }),
+  disposeEngine: (sessionId) => ipcRenderer.send('engine:dispose', { sessionId }),
   respondApproval: (requestId, decision) =>
     ipcRenderer.send('engine:respond-approval', { requestId, decision }),
   onEngineEvent: (callback) => {
@@ -26,6 +27,7 @@ contextBridge.exposeInMainWorld('openCodex', {
     listProjects: () => ipcRenderer.invoke('store:listProjects'),
     listThreads: (projectId) => ipcRenderer.invoke('store:listThreads', projectId),
     listMessages: (threadId) => ipcRenderer.invoke('store:listMessages', threadId),
+    deleteThread: (threadId) => ipcRenderer.invoke('store:deleteThread', threadId),
   },
 
   // Terminal ------------------------------------------------------------

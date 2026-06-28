@@ -24,7 +24,7 @@ const DEFAULTS = Object.freeze({
   model: '',
   approvalPolicy: 'never',
   sandboxMode: 'workspace-write',
-  engineMode: 'sdk',
+  engineMode: 'agentmate',
 });
 
 const ALLOWED_KEYS = Object.keys(DEFAULTS);
@@ -37,7 +37,8 @@ function readRaw() {
   try {
     return JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
   } catch (err) {
-    if (err.code !== 'ENOENT') log.warn(`could not read settings: ${err.message}`);
+    if (err.code === 'ENOENT') return {};
+    log.error(`Settings file error (${err.code}): ${err.message}`);
     return {};
   }
 }
@@ -83,6 +84,9 @@ function sanitize(patch) {
   }
   if (typeof out.apiKey === 'string') out.apiKey = out.apiKey.trim();
   if (typeof out.model === 'string') out.model = out.model.trim();
+  if (out.engineMode && !['agentmate', 'sdk', 'app-server'].includes(out.engineMode)) {
+    throw new Error('引擎模式仅支持 agentmate、sdk 或 app-server');
+  }
   return out;
 }
 
